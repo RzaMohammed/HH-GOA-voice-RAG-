@@ -69,16 +69,6 @@ def check_relevance(
             reason="Empty query",
         )
 
-    # Too short
-    word_count = len(query.split())
-    if word_count < _MIN_QUERY_WORDS:
-        return GuardrailResult(
-            name="relevance",
-            verdict=GuardrailVerdict.WARN,
-            score=0.3,
-            reason=f"Query too short ({word_count} words)",
-        )
-
     # Check explicit off-topic patterns
     for pattern in _COMPILED_OFF_TOPIC:
         if pattern.search(query):
@@ -88,6 +78,16 @@ def check_relevance(
                 score=0.1,
                 reason="Query appears off-topic for the knowledge base",
             )
+
+    # Too short
+    word_count = len(query.split())
+    if word_count < _MIN_QUERY_WORDS:
+        return GuardrailResult(
+            name="relevance",
+            verdict=GuardrailVerdict.WARN,
+            score=0.3,
+            reason=f"Query too short ({word_count} words)",
+        )
 
     # Check if query is a question or information-seeking
     question_indicators = ["?", "what", "how", "why", "when", "where", "who", "which",

@@ -43,14 +43,14 @@ def check_confidence(
             reason="No retrieval results available",
         )
 
-    # Use the best available score (prefer rerank > hybrid > dense > bm25)
+    # Use the best available score (prefer rerank > dense > hybrid > bm25)
     def _best_score(rc: RetrievedChunk) -> float:
         if rc.rerank_score > 0:
             return rc.rerank_score
-        if rc.hybrid_score > 0:
-            return rc.hybrid_score
         if rc.dense_score > 0:
             return rc.dense_score
+        if rc.hybrid_score > 0:
+            return rc.hybrid_score
         return rc.bm25_score
 
     top_score = _best_score(chunks[0])

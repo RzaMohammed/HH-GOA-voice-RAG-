@@ -74,11 +74,17 @@ class RAGOrchestrator:
         reason: str,
         refusal_text: str,
         trace: LatencyTrace,
+        guardrail_results: Optional[list[GuardrailResult]] = None,
+        stt_result: Optional[STTResult] = None,
+        retrieved_chunks: Optional[list[RetrievedChunk]] = None,
     ) -> PipelineResponse:
         """Build a refusal response."""
         trace.finalize()
         return PipelineResponse(
             query=query,
+            stt_result=stt_result,
+            guardrail_results=guardrail_results or [],
+            retrieved_chunks=retrieved_chunks or [],
             final_answer=refusal_text,
             is_refused=True,
             refusal_reason=reason,
@@ -135,7 +141,11 @@ class RAGOrchestrator:
         trace.end_stage(stage)
 
         if safety.verdict == GuardrailVerdict.FAIL:
-            return self._make_refusal(query, safety.reason, REFUSAL_SAFETY, trace)
+            return self._make_refusal(
+                query, safety.reason, REFUSAL_SAFETY, trace,
+                guardrail_results=response.guardrail_results,
+                stt_result=response.stt_result,
+            )
 
         # ── Stage 3: Relevance guardrail ──────────────────────────────
         stage = trace.start_stage("guardrail_relevance")
@@ -144,7 +154,11 @@ class RAGOrchestrator:
         trace.end_stage(stage)
 
         if relevance.verdict == GuardrailVerdict.FAIL:
-            return self._make_refusal(query, relevance.reason, REFUSAL_OFF_TOPIC, trace)
+            return self._make_refusal(
+                query, relevance.reason, REFUSAL_OFF_TOPIC, trace,
+                guardrail_results=response.guardrail_results,
+                stt_result=response.stt_result,
+            )
 
         # ── Stage 4 & 5: Parallel retrieval ───────────────────────────
         dense_results: list[RetrievedChunk] = []
@@ -204,7 +218,10 @@ class RAGOrchestrator:
 
         if confidence.verdict == GuardrailVerdict.FAIL:
             return self._make_refusal(
-                query, confidence.reason, REFUSAL_NO_EVIDENCE, trace
+                query, confidence.reason, REFUSAL_NO_EVIDENCE, trace,
+                guardrail_results=response.guardrail_results,
+                stt_result=response.stt_result,
+                retrieved_chunks=response.retrieved_chunks,
             )
 
         # ── Stage 9: LLM generation ──────────────────────────────────
@@ -216,7 +233,9 @@ class RAGOrchestrator:
             logger.error(f"LLM generation failed: {exc}")
             trace.end_stage(stage)
             return self._make_refusal(
-                query, f"Generation failed: {exc}", REFUSAL_NO_EVIDENCE, trace
+                query, f"Generation failed: {exc}", REFUSAL_NO_EVIDENCE, trace,
+                guardrail_results=response.guardrail_results,
+                stt_result=response.stt_result,
             )
         trace.end_stage(stage)
 

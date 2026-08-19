@@ -43,8 +43,8 @@ def chunk_fixed(
         **meta_kwargs: Extra fields forwarded to ``ChunkMetadata``.
     """
     cfg = get_settings()
-    window_size = window_size or cfg.chunk_size_words
-    overlap = overlap or cfg.chunk_overlap_words
+    window_size = window_size if window_size is not None else cfg.chunk_size_words
+    overlap = overlap if overlap is not None else cfg.chunk_overlap_words
     step = max(1, window_size - overlap)
 
     text = preprocess_text(text)
@@ -87,7 +87,7 @@ def chunk_sentence(
     Respects both Indic (। ॥) and English (.!?) sentence boundaries.
     """
     cfg = get_settings()
-    max_words = max_words or cfg.chunk_size_words
+    max_words = max_words if max_words is not None else cfg.chunk_size_words
 
     text = preprocess_text(text)
     sentences = split_sentences(text)
