@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice RAG — Intelligent Knowledge Search</title>
+    <meta name="description" content="Voice-enabled Retrieval-Augmented Generation system with real-time pipeline telemetry and grounding verification.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ═══ Ambient background ═══ -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- ═══ Header ═══ -->
+    <header class="header" id="header">
+        <div class="header-content">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="14" stroke="url(#logo-grad)" stroke-width="2.5"/>
+                        <path d="M10 20 L16 10 L22 20" stroke="url(#logo-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="16" cy="22" r="2" fill="url(#logo-grad)"/>
+                        <defs>
+                            <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
+                                <stop offset="0%" stop-color="#818cf8"/>
+                                <stop offset="100%" stop-color="#c084fc"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="logo-text">VoiceRAG</h1>
+                    <p class="logo-sub">Multilingual Knowledge Engine</p>
+                </div>
+            </div>
+            <nav class="nav-tabs" id="navTabs">
+                <button class="nav-tab active" data-tab="search" id="tab-search">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    Search
+                </button>
+                <button class="nav-tab" data-tab="benchmark" id="tab-benchmark">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    Benchmark
+                </button>
+            </nav>
+            <div class="header-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ Main Content ═══ -->
+    <main class="main-content">
+
+        <!-- ── Search Tab ── -->
+        <section class="tab-panel active" id="panel-search">
+
+            <!-- Query input area -->
+            <div class="query-section" id="querySection">
+                <div class="query-card glass-card">
+                    <div class="query-input-row">
+                        <div class="input-wrapper">
+                            <input type="text" id="queryInput" class="query-input"
+                                   placeholder="Ask anything... (English or हिंदी)"
+                                   autocomplete="off" spellcheck="false">
+                            <div class="input-underline"></div>
+                        </div>
+                        <button class="btn btn-primary" id="searchBtn" title="Search">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        </button>
+                        <div class="voice-divider"></div>
+                        <button class="btn btn-voice" id="voiceBtn" title="Voice input">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                            <div class="voice-pulse" id="voicePulse"></div>
+                        </button>
+                        <label class="btn btn-upload" id="uploadBtn" title="Upload audio file">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            <input type="file" id="audioFileInput" accept="audio/*" hidden>
+                        </label>
+                    </div>
+                    <!-- Audio waveform visualizer -->
+                    <div class="waveform-container" id="waveformContainer" style="display:none;">
+                        <canvas id="waveformCanvas" width="600" height="60"></canvas>
+                        <span class="recording-label" id="recordingLabel">Recording...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results area -->
+            <div class="results-section" id="resultsSection" style="display:none;">
+
+                <!-- Answer card -->
+                <div class="answer-card glass-card" id="answerCard">
+                    <div class="answer-header">
+                        <h2 class="answer-title">Answer</h2>
+                        <div class="grounding-badge" id="groundingBadge">
+                            <span class="grounding-dot"></span>
+                            <span class="grounding-text">Verifying...</span>
+                        </div>
+                    </div>
+                    <div class="answer-body" id="answerBody">
+                        <div class="skeleton-lines">
+                            <div class="skeleton-line"></div>
+                            <div class="skeleton-line short"></div>
+                            <div class="skeleton-line"></div>
+                        </div>
+                    </div>
+                    <div class="answer-meta" id="answerMeta" style="display:none;">
+                        <span class="meta-item" id="metaProvider"></span>
+                        <span class="meta-item" id="metaTokens"></span>
+                        <span class="meta-item" id="metaGenTime"></span>
+                    </div>
+                </div>
+
+                <!-- Pipeline trace waterfall -->
+                <div class="trace-card glass-card" id="traceCard">
+                    <h3 class="section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Pipeline Trace
+                        <span class="total-latency" id="totalLatency"></span>
+                    </h3>
+                    <div class="waterfall" id="waterfall"></div>
+                </div>
+
+                <!-- Retrieved passages -->
+                <div class="passages-card glass-card" id="passagesCard">
+                    <h3 class="section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                        Retrieved Passages
+                    </h3>
+                    <div class="passages-grid" id="passagesGrid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Benchmark Tab ── -->
+        <section class="tab-panel" id="panel-benchmark">
+            <div class="benchmark-section">
+                <div class="benchmark-controls glass-card">
+                    <h3 class="section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                        Latency Benchmark
+                    </h3>
+                    <div class="benchmark-form">
+                        <label class="form-label">
+                            Queries
+                            <input type="number" id="benchNumQueries" value="10" min="5" max="100" class="form-input">
+                        </label>
+                        <label class="form-label">
+                            Warmup
+                            <input type="number" id="benchNumWarmup" value="2" min="0" max="10" class="form-input">
+                        </label>
+                        <button class="btn btn-primary btn-run-bench" id="runBenchBtn">
+                            Run Benchmark
+                        </button>
+                    </div>
+                </div>
+                <div class="benchmark-results" id="benchResults" style="display:none;">
+                    <div class="percentile-cards" id="percentileCards"></div>
+                    <div class="stage-chart glass-card" id="stageChart">
+                        <h3 class="section-title">Stage Breakdown (avg ms)</h3>
+                        <div class="stage-bars" id="stageBars"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
