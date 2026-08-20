@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # ── Dataset ─────────────────────────────────────────────────────────
     dataset_name: str = "ai4bharat/MSMARCO-XI"
     dataset_split: str = "train"
-    dataset_language: str = "hindi"  # language subset
+    dataset_language: str = "hi"  # default Indic language: "hi" (Hindi), "bn", "te", "ta", etc.
     dataset_max_samples: int = 5000  # cap for rapid prototyping; 0 = unlimited
     dataset_streaming: bool = True
 

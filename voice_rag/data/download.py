@@ -47,28 +47,68 @@ def _resolve_field(row: dict, field_key: str, default=None):
 # Passage extraction helper
 # ═══════════════════════════════════════════════════════════════════════════
 
+LANGUAGE_CONFIG_MAP = {
+    "hi": {"name": "Hindi", "train": "train/hintrain.parquet", "val": "validation/hinval.parquet"},
+    "bn": {"name": "Bengali", "train": "train/bentrain.parquet", "val": "validation/benval.parquet"},
+    "te": {"name": "Telugu", "train": "train/teltrain.parquet", "val": "validation/telval.parquet"},
+    "ta": {"name": "Tamil", "train": "train/tamtrain.parquet", "val": "validation/tamval.parquet"},
+    "mr": {"name": "Marathi", "train": "train/martrain.parquet", "val": "validation/marval.parquet"},
+    "gu": {"name": "Gujarati", "train": "train/gujtrain.parquet", "val": "validation/gujval.parquet"},
+    "kn": {"name": "Kannada", "train": "train/kantrain.parquet", "val": "validation/kanval.parquet"},
+    "ml": {"name": "Malayalam", "train": "train/maltrain.parquet", "val": "validation/malval.parquet"},
+    "or": {"name": "Odia", "train": "train/oritrain.parquet", "val": "validation/orival.parquet"},
+    "pa": {"name": "Punjabi", "train": "train/pantrain.parquet", "val": "validation/panval.parquet"},
+    "as": {"name": "Assamese", "train": "train/asmtrain.parquet", "val": "validation/asmval.parquet"},
+    "ur": {"name": "Urdu", "train": "train/urdtrain.parquet", "val": "validation/urdval.parquet"},
+    "ne": {"name": "Nepali", "train": "train/neptrain.parquet", "val": "validation/nepval.parquet"},
+    "sa": {"name": "Sanskrit", "train": "train/santrain.parquet", "val": "validation/sanval.parquet"},
+    "hindi": {"name": "Hindi", "train": "train/hintrain.parquet", "val": "validation/hinval.parquet"},
+    "bengali": {"name": "Bengali", "train": "train/bentrain.parquet", "val": "validation/benval.parquet"},
+    "telugu": {"name": "Telugu", "train": "train/teltrain.parquet", "val": "validation/telval.parquet"},
+    "tamil": {"name": "Tamil", "train": "train/tamtrain.parquet", "val": "validation/tamval.parquet"},
+    "marathi": {"name": "Marathi", "train": "train/martrain.parquet", "val": "validation/marval.parquet"},
+    "gujarati": {"name": "Gujarati", "train": "train/gujtrain.parquet", "val": "validation/gujval.parquet"},
+    "kannada": {"name": "Kannada", "train": "train/kantrain.parquet", "val": "validation/kanval.parquet"},
+    "malayalam": {"name": "Malayalam", "train": "train/maltrain.parquet", "val": "validation/malval.parquet"},
+    "odia": {"name": "Odia", "train": "train/oritrain.parquet", "val": "validation/orival.parquet"},
+    "punjabi": {"name": "Punjabi", "train": "train/pantrain.parquet", "val": "validation/panval.parquet"},
+    "assamese": {"name": "Assamese", "train": "train/asmtrain.parquet", "val": "validation/asmval.parquet"},
+    "urdu": {"name": "Urdu", "train": "train/urdtrain.parquet", "val": "validation/urdval.parquet"},
+    "nepali": {"name": "Nepali", "train": "train/neptrain.parquet", "val": "validation/nepval.parquet"},
+    "sanskrit": {"name": "Sanskrit", "train": "train/santrain.parquet", "val": "validation/sanval.parquet"},
+}
+
+
 def _extract_passages(row: dict) -> tuple[list[dict], list[dict]]:
     """
     Extract passage dicts and translated passage dicts from a row.
-
-    MSMARCO-XI stores passages either as:
-    - ``passages`` dict with keys ``passage_text`` and ``is_selected``
-    - ``Translated_passages`` and ``English_passages`` with parallel arrays
+    Handles MSMARCO-XI schema variants (Translated_passages, English_passages, is_selected).
     """
     passages: list[dict] = []
     translated: list[dict] = []
 
-    # --- Standard passages dict ---
     raw_passages = _resolve_field(row, "passages")
     if isinstance(raw_passages, dict):
-        texts = raw_passages.get("passage_text", [])
-        selected = raw_passages.get("is_selected", [0] * len(texts))
-        for i, (txt, sel) in enumerate(zip(texts, selected)):
-            passages.append({
-                "text": str(txt),
-                "is_selected": int(sel),
-                "index": i,
-            })
+        # 1. Check direct MSMARCO-XI structure: Translated_passages & English_passages
+        trans_list = raw_passages.get("Translated_passages", []) or raw_passages.get("translated_passages", [])
+        eng_list = raw_passages.get("English_passages", []) or raw_passages.get("english_passages", [])
+        is_selected = raw_passages.get("is_selected", [])
+
+        # Fallback to passage_text if present
+        if not trans_list and not eng_list and "passage_text" in raw_passages:
+            texts = raw_passages.get("passage_text", [])
+            is_selected = is_selected or [0] * len(texts)
+            for i, (txt, sel) in enumerate(zip(texts, is_selected)):
+                passages.append({"text": str(txt), "is_selected": int(sel), "index": i})
+        else:
+            num_p = max(len(trans_list), len(eng_list), len(is_selected))
+            for i in range(num_p):
+                sel = int(is_selected[i]) if i < len(is_selected) else 0
+                if i < len(eng_list) and eng_list[i]:
+                    passages.append({"text": str(eng_list[i]), "is_selected": sel, "index": i})
+                if i < len(trans_list) and trans_list[i]:
+                    translated.append({"text": str(trans_list[i]), "is_selected": sel, "index": i})
+
     elif isinstance(raw_passages, list):
         for i, p in enumerate(raw_passages):
             if isinstance(p, dict):
@@ -80,39 +120,6 @@ def _extract_passages(row: dict) -> tuple[list[dict], list[dict]]:
             else:
                 passages.append({"text": str(p), "is_selected": 0, "index": i})
 
-    # --- Translated passages ---
-    raw_translated = _resolve_field(row, "translated_passages")
-    if isinstance(raw_translated, dict):
-        texts = raw_translated.get("passage_text", [])
-        selected = raw_translated.get("is_selected", [0] * len(texts))
-        for i, (txt, sel) in enumerate(zip(texts, selected)):
-            translated.append({
-                "text": str(txt),
-                "is_selected": int(sel),
-                "index": i,
-            })
-    elif isinstance(raw_translated, list):
-        for i, p in enumerate(raw_translated):
-            if isinstance(p, dict):
-                translated.append({
-                    "text": p.get("passage_text", p.get("text", "")),
-                    "is_selected": int(p.get("is_selected", 0)),
-                    "index": i,
-                })
-
-    # --- English passages (fallback) ---
-    if not passages:
-        raw_english = _resolve_field(row, "english_passages")
-        if isinstance(raw_english, dict):
-            texts = raw_english.get("passage_text", [])
-            selected = raw_english.get("is_selected", [0] * len(texts))
-            for i, (txt, sel) in enumerate(zip(texts, selected)):
-                passages.append({
-                    "text": str(txt),
-                    "is_selected": int(sel),
-                    "index": i,
-                })
-
     return passages, translated
 
 
@@ -120,7 +127,7 @@ def _extract_passages(row: dict) -> tuple[list[dict], list[dict]]:
 # Row → DocumentRecord
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _row_to_record(row: dict, language: str = "en") -> DocumentRecord:
+def _row_to_record(row: dict, language: str = "hi") -> DocumentRecord:
     """Convert a raw HF dataset row to a typed DocumentRecord."""
     passages, translated = _extract_passages(row)
     return DocumentRecord(
@@ -144,28 +151,31 @@ def stream_dataset(
     split: Optional[str] = None,
 ) -> Iterator[DocumentRecord]:
     """
-    Stream MSMARCO-XI records from HuggingFace.
-
-    Falls back to the built-in local sample if the HF dataset cannot
-    be loaded (no network, missing auth, etc.).
+    Stream real MSMARCO-XI records from HuggingFace Parquet data files.
     """
     cfg = get_settings()
     max_samples = max_samples or cfg.dataset_max_samples
     language = language or cfg.dataset_language
     split = split or cfg.dataset_split
 
+    lang_info = LANGUAGE_CONFIG_MAP.get(language, LANGUAGE_CONFIG_MAP.get("hi"))
+    data_file = lang_info.get(split, lang_info.get("train", "train/hintrain.parquet"))
+
     try:
         from datasets import load_dataset
+        import os
+
+        hf_token = os.environ.get("HUGGING_API") or os.environ.get("HF_TOKEN")
 
         logger.info(
-            f"Streaming {cfg.dataset_name} | lang={language} | split={split} | max={max_samples}"
+            f"Streaming {cfg.dataset_name} | lang={language} ({lang_info['name']}) | file={data_file} | max={max_samples}"
         )
         ds = load_dataset(
             cfg.dataset_name,
-            language,
-            split=split,
+            data_files=data_file,
+            split="train",
             streaming=cfg.dataset_streaming,
-            trust_remote_code=True,
+            token=hf_token,
         )
 
         count = 0
@@ -175,7 +185,7 @@ def stream_dataset(
             yield _row_to_record(dict(row), language=language)
             count += 1
 
-        logger.info(f"Streamed {count} records from {cfg.dataset_name}")
+        logger.info(f"Streamed {count} real records from {cfg.dataset_name}")
 
     except Exception as exc:
         logger.warning(f"HF dataset load failed ({exc}), falling back to local sample")
