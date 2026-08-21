@@ -31,12 +31,19 @@
         // Search
         queryInput: $('#queryInput'),
         searchBtn: $('#searchBtn'),
-        voiceBtn: $('#voiceBtn'),
-        uploadBtn: $('#uploadBtn'),
-        audioFileInput: $('#audioFileInput'),
         waveformContainer: $('#waveformContainer'),
         waveformCanvas: $('#waveformCanvas'),
-        recordingLabel: $('#recordingLabel'),
+        
+        // Voice State Machine
+        voiceStateIdle: $('#voiceStateIdle'),
+        voiceStateListening: $('#voiceStateListening'),
+        voiceStateReview: $('#voiceStateReview'),
+        voiceStartBtn: $('#voiceStartBtn'),
+        voiceStopBtn: $('#voiceStopBtn'),
+        recordingTimer: $('#recordingTimer'),
+        transcriptionText: $('#transcriptionText'),
+        btnRetryVoice: $('#btnRetryVoice'),
+        btnRunRag: $('#btnRunRag'),
 
         // Results
         resultsSection: $('#resultsSection'),
@@ -69,6 +76,8 @@
     let audioContext = null;
     let analyser = null;
     let animationId = null;
+    let timerInterval = null;
+    let recordingSeconds = 0;
 
     // ═══════════════════════════════════════════════════════════════════
     // Tab Navigation
@@ -141,11 +150,27 @@
     // Voice Recording
     // ═══════════════════════════════════════════════════════════════════
 
-    els.voiceBtn.addEventListener('click', async () => {
-        if (isRecording) {
-            stopRecording();
-        } else {
-            await startRecording();
+    els.voiceStartBtn.addEventListener('click', () => {
+        if (!isRecording) startRecording();
+    });
+
+    els.voiceStopBtn.addEventListener('click', () => {
+        stopRecording();
+    });
+
+    els.btnRetryVoice.addEventListener('click', () => {
+        els.voiceStateReview.style.display = 'none';
+        els.voiceStateIdle.style.display = 'block';
+        els.transcriptionText.textContent = '';
+    });
+
+    els.btnRunRag.addEventListener('click', () => {
+        const text = els.transcriptionText.textContent;
+        if (text && text !== 'Transcribing...' && !text.startsWith('Error')) {
+            els.queryInput.value = text;
+            submitTextQuery();
+            els.voiceStateReview.style.display = 'none';
+            els.voiceStateIdle.style.display = 'block';
         }
     });
 
@@ -162,14 +187,24 @@
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach(t => t.stop());
                 const blob = new Blob(audioChunks, { type: 'audio/wav' });
-                await submitVoiceQuery(blob);
+                await submitForTranscription(blob);
             };
 
             mediaRecorder.start();
             isRecording = true;
-            els.voiceBtn.classList.add('recording');
-            els.waveformContainer.style.display = 'flex';
-            els.recordingLabel.textContent = 'Recording...';
+            
+            els.voiceStateIdle.style.display = 'none';
+            els.voiceStateListening.style.display = 'block';
+            els.voiceStateReview.style.display = 'none';
+            
+            recordingSeconds = 0;
+            els.recordingTimer.textContent = '00:00';
+            timerInterval = setInterval(() => {
+                recordingSeconds++;
+                const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+                const secs = String(recordingSeconds % 60).padStart(2, '0');
+                els.recordingTimer.textContent = `${mins}:${secs}`;
+            }, 1000);
 
             // Setup waveform visualization
             audioContext = new AudioContext();
@@ -189,8 +224,7 @@
             mediaRecorder.stop();
         }
         isRecording = false;
-        els.voiceBtn.classList.remove('recording');
-        els.recordingLabel.textContent = 'Processing...';
+        clearInterval(timerInterval);
 
         if (animationId) {
             cancelAnimationFrame(animationId);
@@ -240,34 +274,29 @@
         draw();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // File Upload
-    // ═══════════════════════════════════════════════════════════════════
-
-    els.audioFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        await submitVoiceQuery(file);
-        e.target.value = '';
-    });
-
-    async function submitVoiceQuery(audioBlob) {
-        showLoading();
+    async function submitForTranscription(audioBlob) {
+        els.voiceStateListening.style.display = 'none';
+        els.voiceStateReview.style.display = 'block';
+        els.transcriptionText.innerHTML = '<span style="color: var(--text-muted);">Transcribing...</span>';
 
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.wav');
 
         try {
-            const res = await fetch(`${API_BASE}/api/voice`, {
+            const res = await fetch(`${API_BASE}/api/transcribe`, {
                 method: 'POST',
                 body: formData,
             });
             const data = await res.json();
-            renderResults(data);
+            
+            if (data.text) {
+                els.transcriptionText.textContent = data.text;
+                els.queryInput.value = data.text;
+            } else {
+                els.transcriptionText.textContent = 'Could not transcribe audio.';
+            }
         } catch (err) {
-            renderError(err.message);
-        } finally {
-            els.waveformContainer.style.display = 'none';
+            els.transcriptionText.textContent = `Error: ${err.message}`;
         }
     }
 

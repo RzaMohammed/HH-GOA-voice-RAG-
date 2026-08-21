@@ -148,6 +148,21 @@ async def voice_query(
     return response.model_dump()
 
 
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+) -> dict:
+    """
+    Process a voice query for transcription only (returns STTResult).
+    """
+    audio_data = await file.read()
+    from voice_rag.voice.sarvam_stt import get_stt
+    stt = get_stt()
+    stt_result = await stt.transcribe(audio_data)
+    return stt_result.model_dump()
+
+
+
 @app.get("/api/benchmark")
 async def run_benchmark(
     num_queries: int = 10,
