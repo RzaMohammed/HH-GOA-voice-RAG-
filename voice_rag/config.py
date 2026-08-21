@@ -36,8 +36,9 @@ class Settings(BaseSettings):
     # ── Model Choices ───────────────────────────────────────────────────
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    llm_provider: Literal["gemini", "groq", "openai", "mock"] = "mock"
+    llm_provider: Literal["gemini", "groq", "openai", "sarvam", "mock"] = "sarvam"
     llm_model: str = "gemini-2.0-flash"
+    sarvam_llm_model: str = "sarvam-105b"
 
     # ── Dataset ─────────────────────────────────────────────────────────
     dataset_name: str = "ai4bharat/MSMARCO-XI"

@@ -43,6 +43,7 @@ class LLMProvider(str, Enum):
     GEMINI = "gemini"
     GROQ = "groq"
     OPENAI = "openai"
+    SARVAM = "sarvam"
     MOCK = "mock"
 
 

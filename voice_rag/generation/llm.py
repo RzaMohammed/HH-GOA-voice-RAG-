@@ -230,6 +230,82 @@ class OpenAILLM(BaseLLM):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Sarvam AI LLM
+# ═══════════════════════════════════════════════════════════════════════════
+
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
+
+
+class SarvamLLM(BaseLLM):
+    """Sarvam AI LLM provider (supporting sarvam-105b, sarvam-105b-conversations, sarvam-2b)."""
+
+    provider_name = "sarvam"
+
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+    ):
+        import httpx
+        cfg = get_settings()
+        self.model_name = model or cfg.sarvam_llm_model
+        self.api_key = api_key or cfg.sarvam_api_key
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+        if not self.api_key:
+            raise ValueError("SARVAM_API_KEY is required for Sarvam LLM provider")
+
+        logger.info(f"Sarvam LLM initialised: {self.model_name}")
+
+    def generate(
+        self,
+        query: str,
+        chunks: Sequence[RetrievedChunk],
+        system_prompt: Optional[str] = None,
+    ) -> GenerationResult:
+        import httpx
+        user_prompt = build_user_prompt(query, chunks)
+        sys_prompt = system_prompt or SYSTEM_PROMPT
+
+        headers = {
+            "api-subscription-key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+
+        t0 = time.perf_counter()
+        with httpx.Client(timeout=45.0) as client:
+            response = client.post(SARVAM_CHAT_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        choices = data.get("choices", [])
+        answer = choices[0].get("message", {}).get("content", "") if choices else ""
+        usage = data.get("usage", {})
+
+        return GenerationResult(
+            answer=answer,
+            provider="sarvam",
+            model=self.model_name,
+            prompt_tokens=usage.get("prompt_tokens", len(user_prompt.split())),
+            completion_tokens=usage.get("completion_tokens", len(answer.split())),
+            generation_time_ms=elapsed_ms,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Factory
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -246,6 +322,7 @@ def get_llm(provider: Optional[str] = None) -> BaseLLM:
         "gemini": GeminiLLM,
         "groq": GroqLLM,
         "openai": OpenAILLM,
+        "sarvam": SarvamLLM,
         "mock": MockLLM,
     }
 
