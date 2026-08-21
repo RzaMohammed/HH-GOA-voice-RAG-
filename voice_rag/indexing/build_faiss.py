@@ -70,11 +70,26 @@ def build_faiss_index(
     embeddings = np.vstack(all_embeddings).astype(np.float32)
     dim = embeddings.shape[1]
 
-    logger.info(f"Building FAISS IndexFlatIP — {len(embeddings)} vectors × {dim}d")
+    index_type = cfg.faiss_index_type
+    logger.info(f"Building FAISS {index_type} — {len(embeddings)} vectors × {dim}d")
 
     # --- Build index ---
-    index = faiss.IndexFlatIP(dim)
-    index.add(embeddings)
+    if index_type == "HNSWFlat":
+        index = faiss.IndexHNSWFlat(dim, cfg.faiss_hnsw_m, faiss.METRIC_INNER_PRODUCT)
+        index.hnsw.efConstruction = cfg.faiss_hnsw_ef_construction
+        index.hnsw.efSearch = cfg.faiss_hnsw_ef_search
+        index.add(embeddings)
+    elif index_type == "IVFFlat":
+        quantizer = faiss.IndexFlatIP(dim)
+        nlist = min(cfg.faiss_ivf_nlist, max(4, int(np.sqrt(len(embeddings)))))
+        index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+        if not index.is_trained:
+            index.train(embeddings)
+        index.add(embeddings)
+        index.nprobe = min(cfg.faiss_ivf_nprobe, nlist)
+    else:
+        index = faiss.IndexFlatIP(dim)
+        index.add(embeddings)
 
     # --- Persist ---
     index_path = index_dir / "faiss_index.bin"

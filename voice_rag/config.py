@@ -52,12 +52,20 @@ class Settings(BaseSettings):
     chunk_overlap_words: int = 25
     semantic_similarity_threshold: float = 0.65
 
-    # ── Retrieval ───────────────────────────────────────────────────────
-    dense_top_k: int = 50
-    bm25_top_k: int = 50
+    # ── Retrieval & FAISS Index Tuning ──────────────────────────────────
+    dense_top_k: int = 30
+    bm25_top_k: int = 30
     hybrid_alpha: float = 0.6  # weight for dense in fusion
     rerank_top_k: int = 5
+    rerank_candidate_pool: int = 30
     min_retrieval_score: float = 0.25
+    faiss_index_type: Literal["FlatIP", "HNSWFlat", "IVFFlat"] = "FlatIP"
+    faiss_hnsw_m: int = 32
+    faiss_hnsw_ef_construction: int = 64
+    faiss_hnsw_ef_search: int = 32
+    faiss_ivf_nlist: int = 64
+    faiss_ivf_nprobe: int = 8
+    lru_cache_size: int = 2000
 
     # ── Guardrails ──────────────────────────────────────────────────────
     safety_enabled: bool = True

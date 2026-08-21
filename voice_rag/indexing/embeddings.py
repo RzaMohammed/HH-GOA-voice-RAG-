@@ -39,7 +39,10 @@ class Embedder:
 
         logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
         self._model = SentenceTransformer(self.model_name, device=self.device)
-        self._dim = self._model.get_sentence_embedding_dimension()
+        try:
+            self._dim = self._model.get_embedding_dimension()
+        except AttributeError:
+            self._dim = self._model.get_sentence_embedding_dimension()
         logger.info(f"Embedding model ready — dim={self._dim}")
 
     @property
@@ -53,31 +56,42 @@ class Embedder:
         batch_size: int = 64,
         normalize: bool = True,
         show_progress_bar: bool = False,
+        is_query: bool = False,
     ) -> np.ndarray:
         """
-        Encode texts into dense vectors.
-
-        Args:
-            texts:             Input strings.
-            batch_size:        Encoding batch size.
-            normalize:         L2-normalise vectors (for cosine via dot product).
-            show_progress_bar: Show tqdm progress.
-
-        Returns:
-            Array of shape ``(len(texts), dimension)``.
+        Encode texts into dense vectors with optional prefix routing and GPU acceleration.
         """
-        embeddings = self._model.encode(
-            list(texts),
-            batch_size=batch_size,
-            show_progress_bar=show_progress_bar,
-            normalize_embeddings=normalize,
-            convert_to_numpy=True,
-        )
+        import torch
+
+        formatted_texts = list(texts)
+        # Prefix routing for e5 models
+        if "e5" in self.model_name.lower():
+            prefix = "query: " if is_query else "passage: "
+            formatted_texts = [f"{prefix}{t}" if not t.startswith(prefix) else t for t in formatted_texts]
+
+        with torch.inference_mode():
+            if self.device == "cuda":
+                with torch.cuda.amp.autocast(enabled=True):
+                    embeddings = self._model.encode(
+                        formatted_texts,
+                        batch_size=batch_size,
+                        show_progress_bar=show_progress_bar,
+                        normalize_embeddings=normalize,
+                        convert_to_numpy=True,
+                    )
+            else:
+                embeddings = self._model.encode(
+                    formatted_texts,
+                    batch_size=batch_size,
+                    show_progress_bar=show_progress_bar,
+                    normalize_embeddings=normalize,
+                    convert_to_numpy=True,
+                )
         return np.asarray(embeddings, dtype=np.float32)
 
-    def encode_single(self, text: str, normalize: bool = True) -> np.ndarray:
+    def encode_single(self, text: str, normalize: bool = True, is_query: bool = True) -> np.ndarray:
         """Encode a single text string."""
-        return self.encode([text], normalize=normalize)[0]
+        return self.encode([text], normalize=normalize, is_query=is_query)[0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

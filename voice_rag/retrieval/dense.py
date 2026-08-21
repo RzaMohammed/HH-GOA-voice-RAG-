@@ -20,8 +20,36 @@ from voice_rag.indexing.embeddings import Embedder, get_embedder
 from voice_rag.pipeline.schemas import ChunkMetadata, RetrievedChunk
 
 
+from collections import OrderedDict
+import threading
+
+class LRUQueryVectorCache:
+    """Thread-safe LRU cache for query embeddings."""
+    def __init__(self, capacity: int = 2000):
+        self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._capacity = capacity
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Optional[np.ndarray]:
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            return None
+
+    def put(self, key: str, value: np.ndarray) -> None:
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+            self._cache[key] = value
+            if len(self._cache) > self._capacity:
+                self._cache.popitem(last=False)
+
+_query_cache = LRUQueryVectorCache()
+
+
 class DenseRetriever:
-    """Top-K dense retrieval using FAISS inner-product search."""
+    """Top-K dense retrieval using FAISS inner-product search with LRU caching."""
 
     def __init__(
         self,
@@ -36,6 +64,7 @@ class DenseRetriever:
         else:
             self._index, self._chunks = load_faiss_index(index_dir)
         self._embedder = embedder or get_embedder()
+        self._cache = _query_cache
 
     @property
     def num_vectors(self) -> int:
@@ -47,22 +76,18 @@ class DenseRetriever:
         top_k: Optional[int] = None,
     ) -> list[RetrievedChunk]:
         """
-        Retrieve top-K chunks most similar to the query.
-
-        Args:
-            query: Natural language query string.
-            top_k: Number of results to return (default from config).
-
-        Returns:
-            Sorted list of RetrievedChunk with dense_score populated.
+        Retrieve top-K chunks most similar to the query with LRU embedding cache.
         """
         cfg = get_settings()
         top_k = top_k or cfg.dense_top_k
         top_k = min(top_k, self._index.ntotal)
 
-        # Encode query
-        query_vec = self._embedder.encode_single(query, normalize=True)
-        query_vec = query_vec.reshape(1, -1).astype(np.float32)
+        # Check LRU cache for query embedding
+        query_vec = self._cache.get(query)
+        if query_vec is None:
+            query_vec = self._embedder.encode_single(query, normalize=True, is_query=True)
+            query_vec = query_vec.reshape(1, -1).astype(np.float32)
+            self._cache.put(query, query_vec)
 
         # FAISS search (inner product = cosine on normalised vectors)
         scores, indices = self._index.search(query_vec, top_k)
