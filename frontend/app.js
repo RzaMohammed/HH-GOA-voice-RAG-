@@ -1,61 +1,79 @@
 /**
- * Voice RAG — Frontend Application
+ * VoiceRAG — Testing Dashboard Controller
  *
- * Audio recording (Web Audio API), REST/WebSocket API client,
- * pipeline telemetry visualization, and benchmark dashboard.
+ * Audio recording (Web Audio API), Speech Synthesis, REST/WebSocket API client,
+ * pipeline telemetry visualization, preset pill execution, and benchmark harness.
  */
 
 (() => {
     'use strict';
 
     // ═══════════════════════════════════════════════════════════════════
-    // Configuration
+    // Configuration & Endpoints
     // ═══════════════════════════════════════════════════════════════════
 
     const API_BASE = window.location.origin;
-    const WS_URL = `ws://${window.location.host}/ws/voice`;
 
     // ═══════════════════════════════════════════════════════════════════
-    // DOM Elements
+    // DOM Elements Mapping
     // ═══════════════════════════════════════════════════════════════════
 
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
 
     const els = {
-        // Header
-        statusDot: $('#statusDot'),
-        statusText: $('#statusText'),
-        navTabs: $$('.nav-tab'),
+        // Navigation
+        navTabs: $$('.nav-link-item'),
 
-        // Search
+        // Input & Actions
         queryInput: $('#queryInput'),
         searchBtn: $('#searchBtn'),
-        waveformContainer: $('#waveformContainer'),
-        waveformCanvas: $('#waveformCanvas'),
-        
-        // Voice State Machine
-        voiceStateIdle: $('#voiceStateIdle'),
-        voiceStateListening: $('#voiceStateListening'),
-        voiceStateReview: $('#voiceStateReview'),
+        presetPills: $$('.preset-pill-btn'),
+        chunkingStrategySelect: $('#chunkingStrategySelect'),
+
+        // Voice Controls & State
         voiceStartBtn: $('#voiceStartBtn'),
         voiceStopBtn: $('#voiceStopBtn'),
+        voiceStateListening: $('#voiceStateListening'),
+        voiceStateReview: $('#voiceStateReview'),
         recordingTimer: $('#recordingTimer'),
+        waveformCanvas: $('#waveformCanvas'),
         transcriptionText: $('#transcriptionText'),
         btnRetryVoice: $('#btnRetryVoice'),
         btnRunRag: $('#btnRunRag'),
 
-        // Results
+        // Answer & Grounding
         resultsSection: $('#resultsSection'),
         answerBody: $('#answerBody'),
+        audioPlaybackBtn: $('#audioPlaybackBtn'),
+        groundingBadge: $('#groundingBadge'),
+        groundingText: $('.guardrail-badge-text'),
         answerMeta: $('#answerMeta'),
         metaProvider: $('#metaProvider'),
         metaTokens: $('#metaTokens'),
         metaGenTime: $('#metaGenTime'),
-        groundingBadge: $('#groundingBadge'),
-        waterfall: $('#waterfall'),
-        totalLatency: $('#totalLatency'),
+
+        // Latency Telemetry
+        telemetryTotal: $('#telemetryTotal'),
+        barStt: $('#barStt'),
+        valStt: $('#valStt'),
+        barGuard: $('#barGuard'),
+        valGuard: $('#valGuard'),
+        barRet: $('#barRet'),
+        valRet: $('#valRet'),
+        barRerank: $('#barRerank'),
+        valRerank: $('#valRerank'),
+        barGen: $('#barGen'),
+        valGen: $('#valGen'),
+        barGround: $('#barGround'),
+        valGround: $('#valGround'),
+
+        // Full Waterfall & Inspector
+        waterfallFull: $('#waterfallFull'),
+        totalLatencyTrace: $('#totalLatencyTrace'),
         passagesGrid: $('#passagesGrid'),
+        chunksCountLabel: $('#chunksCountLabel'),
+        retrievalInspectorGrid: $('#retrievalInspectorGrid'),
 
         // Benchmark
         benchNumQueries: $('#benchNumQueries'),
@@ -78,9 +96,10 @@
     let animationId = null;
     let timerInterval = null;
     let recordingSeconds = 0;
+    let lastGeneratedAnswer = '';
 
     // ═══════════════════════════════════════════════════════════════════
-    // Tab Navigation
+    // 1. Tab Navigation
     // ═══════════════════════════════════════════════════════════════════
 
     els.navTabs.forEach(tab => {
@@ -88,42 +107,48 @@
             const target = tab.dataset.tab;
             els.navTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            $$('.tab-panel').forEach(p => p.classList.remove('active'));
-            $(`#panel-${target}`).classList.add('active');
+            $$('.tab-pane').forEach(p => p.classList.remove('active'));
+            const targetPane = $(`#panel-${target}`);
+            if (targetPane) targetPane.classList.add('active');
         });
     });
 
     // ═══════════════════════════════════════════════════════════════════
-    // Health Check
+    // 2. Preset Pill Buttons
     // ═══════════════════════════════════════════════════════════════════
 
-    async function checkHealth() {
-        try {
-            const res = await fetch(`${API_BASE}/api/health`);
-            if (res.ok) {
-                const data = await res.json();
-                els.statusDot.classList.add('online');
-                els.statusDot.classList.remove('error');
-                els.statusText.textContent = data.indices_loaded ? 'Online (indices loaded)' : 'Online (no indices)';
-            } else {
-                throw new Error('Not OK');
+    els.presetPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            const query = pill.dataset.query;
+            if (query && els.queryInput) {
+                els.queryInput.value = query;
+                submitTextQuery();
             }
-        } catch {
-            els.statusDot.classList.add('error');
-            els.statusDot.classList.remove('online');
-            els.statusText.textContent = 'Offline';
-        }
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 3. Audio Playback (TTS)
+    // ═══════════════════════════════════════════════════════════════════
+
+    if (els.audioPlaybackBtn) {
+        els.audioPlaybackBtn.addEventListener('click', () => {
+            if (!lastGeneratedAnswer) return;
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(lastGeneratedAnswer);
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        });
     }
 
-    checkHealth();
-    setInterval(checkHealth, 15000);
-
     // ═══════════════════════════════════════════════════════════════════
-    // Text Query
+    // 4. Query Execution
     // ═══════════════════════════════════════════════════════════════════
 
     async function submitTextQuery() {
-        const query = els.queryInput.value.trim();
+        const query = els.queryInput ? els.queryInput.value.trim() : '';
         if (!query) return;
 
         showLoading();
@@ -141,38 +166,44 @@
         }
     }
 
-    els.searchBtn.addEventListener('click', submitTextQuery);
-    els.queryInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitTextQuery();
-    });
+    if (els.searchBtn) els.searchBtn.addEventListener('click', submitTextQuery);
+    if (els.queryInput) {
+        els.queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitTextQuery();
+        });
+    }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Voice Recording
+    // 5. Voice Recording & Web Audio
     // ═══════════════════════════════════════════════════════════════════
 
-    els.voiceStartBtn.addEventListener('click', () => {
-        if (!isRecording) startRecording();
-    });
+    if (els.voiceStartBtn) {
+        els.voiceStartBtn.addEventListener('click', () => {
+            if (!isRecording) startRecording();
+        });
+    }
 
-    els.voiceStopBtn.addEventListener('click', () => {
-        stopRecording();
-    });
+    if (els.voiceStopBtn) {
+        els.voiceStopBtn.addEventListener('click', stopRecording);
+    }
 
-    els.btnRetryVoice.addEventListener('click', () => {
-        els.voiceStateReview.style.display = 'none';
-        els.voiceStateIdle.style.display = 'block';
-        els.transcriptionText.textContent = '';
-    });
+    if (els.btnRetryVoice) {
+        els.btnRetryVoice.addEventListener('click', () => {
+            if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
+            if (els.transcriptionText) els.transcriptionText.textContent = '';
+        });
+    }
 
-    els.btnRunRag.addEventListener('click', () => {
-        const text = els.transcriptionText.textContent;
-        if (text && text !== 'Transcribing...' && !text.startsWith('Error')) {
-            els.queryInput.value = text;
-            submitTextQuery();
-            els.voiceStateReview.style.display = 'none';
-            els.voiceStateIdle.style.display = 'block';
-        }
-    });
+    if (els.btnRunRag) {
+        els.btnRunRag.addEventListener('click', () => {
+            const text = els.transcriptionText ? els.transcriptionText.textContent : '';
+            if (text && text !== 'Transcribing...' && !text.startsWith('Error')) {
+                if (els.queryInput) els.queryInput.value = text;
+                submitTextQuery();
+                if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
+            }
+        });
+    }
 
     async function startRecording() {
         try {
@@ -192,21 +223,21 @@
 
             mediaRecorder.start();
             isRecording = true;
-            
-            els.voiceStateIdle.style.display = 'none';
-            els.voiceStateListening.style.display = 'block';
-            els.voiceStateReview.style.display = 'none';
-            
+
+            if (els.voiceStartBtn) els.voiceStartBtn.classList.add('recording');
+            if (els.voiceStateListening) els.voiceStateListening.style.display = 'block';
+            if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
+
             recordingSeconds = 0;
-            els.recordingTimer.textContent = '00:00';
+            if (els.recordingTimer) els.recordingTimer.textContent = '00:00';
             timerInterval = setInterval(() => {
                 recordingSeconds++;
                 const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
                 const secs = String(recordingSeconds % 60).padStart(2, '0');
-                els.recordingTimer.textContent = `${mins}:${secs}`;
+                if (els.recordingTimer) els.recordingTimer.textContent = `${mins}:${secs}`;
             }, 1000);
 
-            // Setup waveform visualization
+            // Audio visualizer
             audioContext = new AudioContext();
             const source = audioContext.createMediaStreamSource(stream);
             analyser = audioContext.createAnalyser();
@@ -215,7 +246,8 @@
             drawWaveform();
 
         } catch (err) {
-            console.error('Microphone access denied:', err);
+            console.error('Microphone error:', err);
+            alert('Microphone access unavailable or denied. Please type your query in the input box.');
         }
     }
 
@@ -225,6 +257,8 @@
         }
         isRecording = false;
         clearInterval(timerInterval);
+
+        if (els.voiceStartBtn) els.voiceStartBtn.classList.remove('recording');
 
         if (animationId) {
             cancelAnimationFrame(animationId);
@@ -237,7 +271,7 @@
     }
 
     function drawWaveform() {
-        if (!analyser) return;
+        if (!analyser || !els.waveformCanvas) return;
 
         const canvas = els.waveformCanvas;
         const ctx = canvas.getContext('2d');
@@ -248,11 +282,11 @@
             animationId = requestAnimationFrame(draw);
             analyser.getByteTimeDomainData(dataArray);
 
-            ctx.fillStyle = 'rgba(10, 10, 15, 0.3)';
+            ctx.fillStyle = 'rgba(9, 44, 24, 0.4)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#818cf8';
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#EAB308';
             ctx.beginPath();
 
             const sliceWidth = canvas.width / bufferLength;
@@ -275,9 +309,9 @@
     }
 
     async function submitForTranscription(audioBlob) {
-        els.voiceStateListening.style.display = 'none';
-        els.voiceStateReview.style.display = 'block';
-        els.transcriptionText.innerHTML = '<span style="color: var(--text-muted);">Transcribing...</span>';
+        if (els.voiceStateListening) els.voiceStateListening.style.display = 'none';
+        if (els.voiceStateReview) els.voiceStateReview.style.display = 'block';
+        if (els.transcriptionText) els.transcriptionText.innerHTML = '<span style="color: var(--cream-text-muted);">Transcribing voice input...</span>';
 
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.wav');
@@ -288,10 +322,10 @@
                 body: formData,
             });
             const data = await res.json();
-            
+
             if (data.text) {
                 els.transcriptionText.textContent = data.text;
-                els.queryInput.value = data.text;
+                if (els.queryInput) els.queryInput.value = data.text;
             } else {
                 els.transcriptionText.textContent = 'Could not transcribe audio.';
             }
@@ -301,139 +335,181 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Results Rendering
+    // 6. Results Rendering
     // ═══════════════════════════════════════════════════════════════════
 
     function showLoading() {
-        els.resultsSection.style.display = 'block';
-        els.answerBody.innerHTML = `
-            <div class="skeleton-lines">
-                <div class="skeleton-line"></div>
-                <div class="skeleton-line short"></div>
-                <div class="skeleton-line"></div>
-            </div>`;
-        els.answerMeta.style.display = 'none';
-        els.groundingBadge.className = 'grounding-badge';
-        els.groundingBadge.querySelector('.grounding-text').textContent = 'Verifying...';
-        els.waterfall.innerHTML = '';
-        els.totalLatency.textContent = '';
-        els.passagesGrid.innerHTML = '';
+        if (els.answerBody) {
+            els.answerBody.innerHTML = `
+                <div class="skeleton-bar-line"></div>
+                <div class="skeleton-bar-line short"></div>
+                <div class="skeleton-bar-line"></div>`;
+        }
+        if (els.answerMeta) els.answerMeta.style.display = 'none';
+        if (els.groundingBadge) {
+            els.groundingBadge.className = 'guardrail-status-pill';
+            if (els.groundingText) els.groundingText.textContent = 'Evaluating...';
+        }
     }
 
     function renderResults(data) {
-        // Answer
-        els.answerBody.textContent = data.final_answer || data.refusal_reason || 'No answer available.';
+        lastGeneratedAnswer = data.final_answer || data.refusal_reason || 'No answer generated.';
 
-        // STT result
-        if (data.stt_result) {
+        // Answer text
+        if (els.answerBody) {
+            els.answerBody.textContent = lastGeneratedAnswer;
+        }
+
+        // STT result update
+        if (data.stt_result && data.stt_result.text && els.queryInput) {
             els.queryInput.value = data.stt_result.text;
         }
 
-        // Grounding badge
-        const grounding = data.grounding;
-        if (grounding) {
+        // Guardrails & Grounding badge
+        if (els.groundingBadge) {
             const badge = els.groundingBadge;
-            badge.className = 'grounding-badge';
-            const text = badge.querySelector('.grounding-text');
+            badge.className = 'guardrail-status-pill';
+            const grounding = data.grounding;
 
-            switch (grounding.status) {
-                case 'grounded':
-                    badge.classList.add('grounded');
-                    text.textContent = `Grounded (${(grounding.confidence * 100).toFixed(0)}%)`;
-                    break;
-                case 'partially_grounded':
-                    badge.classList.add('grounded');
-                    text.textContent = `Partial (${(grounding.confidence * 100).toFixed(0)}%)`;
-                    break;
-                case 'ungrounded':
-                    badge.classList.add('ungrounded');
-                    text.textContent = 'Ungrounded';
-                    break;
-                case 'refused':
-                    badge.classList.add('refused');
-                    text.textContent = 'Refused';
-                    break;
+            if (grounding) {
+                switch (grounding.status) {
+                    case 'grounded':
+                        badge.classList.add('grounded');
+                        if (els.groundingText) els.groundingText.textContent = `Guardrails Passed (${(grounding.confidence * 100).toFixed(0)}%)`;
+                        break;
+                    case 'partially_grounded':
+                        badge.classList.add('grounded');
+                        if (els.groundingText) els.groundingText.textContent = `Partial Grounding (${(grounding.confidence * 100).toFixed(0)}%)`;
+                        break;
+                    case 'ungrounded':
+                        badge.classList.add('ungrounded');
+                        if (els.groundingText) els.groundingText.textContent = 'Ungrounded Hallucination';
+                        break;
+                    case 'refused':
+                        badge.classList.add('refused');
+                        if (els.groundingText) els.groundingText.textContent = 'Refused Policy';
+                        break;
+                    default:
+                        if (els.groundingText) els.groundingText.textContent = grounding.status;
+                }
+            } else if (data.is_refused) {
+                badge.classList.add('refused');
+                if (els.groundingText) els.groundingText.textContent = `Refused: ${data.refusal_reason || 'Safety/Relevance'}`;
+            } else {
+                if (els.groundingText) els.groundingText.textContent = 'Guardrails Passed';
             }
-        } else if (data.is_refused) {
-            els.groundingBadge.classList.add('refused');
-            els.groundingBadge.querySelector('.grounding-text').textContent = 'Refused';
         }
 
-        // Generation meta
-        if (data.generation) {
+        // Meta tags
+        if (data.generation && els.answerMeta) {
             const gen = data.generation;
-            els.metaProvider.textContent = `Provider: ${gen.provider}/${gen.model}`;
-            els.metaTokens.textContent = `Tokens: ${gen.prompt_tokens} → ${gen.completion_tokens}`;
-            els.metaGenTime.textContent = `Gen: ${gen.generation_time_ms.toFixed(1)}ms`;
+            if (els.metaProvider) els.metaProvider.textContent = `Provider: ${gen.provider}/${gen.model}`;
+            if (els.metaTokens) els.metaTokens.textContent = `Tokens: ${gen.prompt_tokens} → ${gen.completion_tokens}`;
+            if (els.metaGenTime) els.metaGenTime.textContent = `Gen: ${gen.generation_time_ms.toFixed(1)}ms`;
             els.answerMeta.style.display = 'flex';
         }
 
-        // Pipeline trace waterfall
-        if (data.latency && data.latency.stages) {
-            renderWaterfall(data.latency);
+        // Latency Telemetry Breakdown & Headline Metric
+        if (data.latency) {
+            const stages = data.latency.stages || [];
+            const totalMs = data.latency.total_ms || 0;
+
+            if (els.telemetryTotal) {
+                els.telemetryTotal.innerHTML = `${totalMs.toFixed(1)} <span class="unit-label">ms</span>`;
+            }
+            if (els.totalLatencyTrace) {
+                els.totalLatencyTrace.textContent = `${totalMs.toFixed(1)} ms total`;
+            }
+
+            // Extract durations
+            const sttStage = stages.find(s => s.stage === 'stt');
+            const guardStage = stages.find(s => s.stage.startsWith('guardrail'));
+            const retStage = stages.find(s => s.stage === 'retrieval' || s.stage === 'hybrid_retrieval');
+            const rerankStage = stages.find(s => s.stage === 'reranking');
+            const genStage = stages.find(s => s.stage === 'generation' || s.stage === 'llm_generation');
+            const groundStage = stages.find(s => s.stage === 'grounding');
+
+            const maxStageMs = Math.max(...stages.map(s => s.duration_ms), 1);
+
+            const updateStage = (barEl, valEl, stage) => {
+                const duration = stage ? stage.duration_ms : 0;
+                if (valEl) valEl.textContent = `${duration.toFixed(1)} ms`;
+                if (barEl) {
+                    const pct = Math.max((duration / maxStageMs) * 100, 4);
+                    barEl.style.width = `${pct}%`;
+                }
+            };
+
+            updateStage(els.barStt, els.valStt, sttStage);
+            updateStage(els.barGuard, els.valGuard, guardStage);
+            updateStage(els.barRet, els.valRet, retStage);
+            updateStage(els.barRerank, els.valRerank, rerankStage);
+            updateStage(els.barGen, els.valGen, genStage);
+            updateStage(els.barGround, els.valGround, groundStage);
+
+            renderFullWaterfall(stages, maxStageMs);
         }
 
-        // Retrieved passages
-        if (data.retrieved_chunks && data.retrieved_chunks.length > 0) {
-            renderPassages(data.retrieved_chunks);
+        // Context Chunks
+        const chunks = data.retrieved_chunks || [];
+        if (els.chunksCountLabel) {
+            els.chunksCountLabel.textContent = `${chunks.length} CHUNKS LOADED`;
         }
+        renderChunks(chunks);
     }
 
     function renderError(message) {
-        els.answerBody.textContent = `Error: ${message}`;
-        els.groundingBadge.classList.add('ungrounded');
-        els.groundingBadge.querySelector('.grounding-text').textContent = 'Error';
+        if (els.answerBody) els.answerBody.textContent = `Error executing pipeline: ${message}`;
+        if (els.groundingBadge) {
+            els.groundingBadge.className = 'guardrail-status-pill ungrounded';
+            if (els.groundingText) els.groundingText.textContent = 'Pipeline Error';
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Waterfall Chart
-    // ═══════════════════════════════════════════════════════════════════
+    function renderFullWaterfall(stages, maxDuration) {
+        if (!els.waterfallFull) return;
 
-    const STAGE_COLORS = {
-        stt: 'stage-stt',
-        guardrail_safety: 'stage-guardrail',
-        guardrail_relevance: 'stage-guardrail',
-        guardrail_confidence: 'stage-guardrail',
-        retrieval: 'stage-retrieval',
-        fusion: 'stage-fusion',
-        reranking: 'stage-reranking',
-        generation: 'stage-generation',
-        grounding: 'stage-grounding',
-    };
+        const stageColors = {
+            stt: 'bar-stt',
+            guardrail_safety: 'bar-guardrail',
+            guardrail_relevance: 'bar-guardrail',
+            guardrail_confidence: 'bar-guardrail',
+            retrieval: 'bar-retrieval',
+            fusion: 'bar-fusion',
+            reranking: 'bar-rerank',
+            generation: 'bar-generation',
+            grounding: 'bar-grounding',
+        };
 
-    function renderWaterfall(latency) {
-        const stages = latency.stages || [];
-        const totalMs = latency.total_ms || 0;
-
-        els.totalLatency.textContent = `${totalMs.toFixed(1)} ms total`;
-
-        const maxDuration = Math.max(...stages.map(s => s.duration_ms), 1);
-
-        els.waterfall.innerHTML = stages.map(stage => {
-            const pct = Math.max((stage.duration_ms / maxDuration) * 100, 3);
-            const colorClass = STAGE_COLORS[stage.stage] || 'stage-stt';
-            const label = stage.stage.replace(/_/g, ' ');
+        els.waterfallFull.innerHTML = stages.map(s => {
+            const pct = Math.max((s.duration_ms / maxDuration) * 100, 3);
+            const colorClass = stageColors[s.stage] || 'bar-retrieval';
+            const label = s.stage.replace(/_/g, ' ').toUpperCase();
 
             return `
-                <div class="waterfall-row">
-                    <span class="waterfall-label">${label}</span>
-                    <div class="waterfall-bar-bg">
-                        <div class="waterfall-bar ${colorClass}" style="width: ${pct}%">
-                            <span class="waterfall-bar-text">${stage.duration_ms.toFixed(1)}ms</span>
+                <div class="stage-timing-item">
+                    <span class="stage-name-mono" style="width: 140px;">${label}</span>
+                    <div class="stage-progress-bg" style="height: 20px;">
+                        <div class="stage-progress-bar ${colorClass}" style="width: ${pct}%;">
+                            <span class="stage-val-text">${s.duration_ms.toFixed(2)} ms</span>
                         </div>
                     </div>
                 </div>`;
         }).join('');
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Passages Rendering
-    // ═══════════════════════════════════════════════════════════════════
+    function renderChunks(chunks) {
+        if (!els.passagesGrid) return;
 
-    function renderPassages(chunks) {
-        els.passagesGrid.innerHTML = chunks.map((rc, i) => {
+        if (!chunks || chunks.length === 0) {
+            els.passagesGrid.innerHTML = '<div class="empty-chunks-msg">No context chunks retrieved for this query.</div>';
+            if (els.retrievalInspectorGrid) els.retrievalInspectorGrid.innerHTML = '<div class="empty-chunks-msg">No retrieval matches.</div>';
+            return;
+        }
+
+        const html = chunks.map((rc, i) => {
             const chunk = rc.chunk;
-            const strategy = chunk.chunk_strategy || 'fixed';
+            const strategy = chunk.chunk_strategy || 'adaptive';
             const scores = [];
             if (rc.dense_score) scores.push(`dense: ${rc.dense_score.toFixed(3)}`);
             if (rc.bm25_score) scores.push(`bm25: ${rc.bm25_score.toFixed(3)}`);
@@ -441,38 +517,45 @@
             if (rc.rerank_score) scores.push(`rerank: ${rc.rerank_score.toFixed(3)}`);
 
             return `
-                <div class="passage-card">
-                    <div class="passage-header">
-                        <span class="passage-rank">#${rc.final_rank || i + 1}</span>
-                        <span class="passage-strategy ${strategy}">${strategy}</span>
+                <div class="chunk-card">
+                    <div class="chunk-top-row">
+                        <span class="chunk-rank-tag">#${rc.final_rank || i + 1}</span>
+                        <span class="chunk-strategy-tag ${strategy}">${strategy}</span>
                     </div>
-                    <p class="passage-text">${escapeHtml(chunk.text)}</p>
-                    <div class="passage-scores">
-                        ${scores.map(s => `<span class="score-tag">${s}</span>`).join('')}
+                    <div class="chunk-body-text">${escapeHtml(chunk.text)}</div>
+                    <div class="chunk-score-tags">
+                        ${scores.map(s => `<span class="score-badge">${s}</span>`).join('')}
                     </div>
                 </div>`;
         }).join('');
+
+        els.passagesGrid.innerHTML = html;
+        if (els.retrievalInspectorGrid) els.retrievalInspectorGrid.innerHTML = html;
     }
 
     function escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text || '';
         return div.innerHTML;
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Benchmark
+    // 7. Latency Benchmark Harness
     // ═══════════════════════════════════════════════════════════════════
 
-    els.runBenchBtn.addEventListener('click', runBenchmark);
+    if (els.runBenchBtn) {
+        els.runBenchBtn.addEventListener('click', runBenchmark);
+    }
 
     async function runBenchmark() {
-        const numQueries = parseInt(els.benchNumQueries.value) || 10;
-        const numWarmup = parseInt(els.benchNumWarmup.value) || 2;
+        const numQueries = parseInt(els.benchNumQueries ? els.benchNumQueries.value : 10) || 10;
+        const numWarmup = parseInt(els.benchNumWarmup ? els.benchNumWarmup.value : 2) || 2;
 
-        els.runBenchBtn.classList.add('loading');
-        els.runBenchBtn.innerHTML = '<span class="spinner"></span> Running...';
-        els.benchResults.style.display = 'none';
+        if (els.runBenchBtn) {
+            els.runBenchBtn.textContent = 'RUNNING BENCHMARK...';
+            els.runBenchBtn.style.opacity = '0.7';
+        }
+        if (els.benchResults) els.benchResults.style.display = 'none';
 
         try {
             const res = await fetch(
@@ -483,60 +566,51 @@
         } catch (err) {
             console.error('Benchmark error:', err);
         } finally {
-            els.runBenchBtn.classList.remove('loading');
-            els.runBenchBtn.innerHTML = 'Run Benchmark';
+            if (els.runBenchBtn) {
+                els.runBenchBtn.textContent = 'Run Benchmark';
+                els.runBenchBtn.style.opacity = '1';
+            }
         }
     }
 
     function renderBenchmark(report) {
+        if (!els.benchResults) return;
         els.benchResults.style.display = 'block';
 
-        // Percentile cards
         const cards = [
-            { label: 'P50', value: report.p50_ms, color: '--accent-emerald' },
-            { label: 'P70', value: report.p70_ms, color: '--accent-indigo' },
-            { label: 'P100', value: report.p100_ms, color: '--accent-red' },
-            { label: 'Mean', value: report.mean_ms, color: '--accent-purple' },
-            { label: 'Std Dev', value: report.std_ms, color: '--accent-amber' },
+            { label: 'P50 (Median)', value: report.p50_ms },
+            { label: 'P70', value: report.p70_ms },
+            { label: 'P100 (Max)', value: report.p100_ms },
+            { label: 'Mean', value: report.mean_ms },
+            { label: 'Std Dev', value: report.std_ms },
         ];
 
-        els.percentileCards.innerHTML = cards.map(c => `
-            <div class="percentile-card">
-                <div class="percentile-label">${c.label}</div>
-                <div class="percentile-value">${c.value.toFixed(1)}</div>
-                <div class="percentile-unit">ms</div>
-            </div>
-        `).join('');
+        if (els.percentileCards) {
+            els.percentileCards.innerHTML = cards.map(c => `
+                <div class="percentile-metric-card">
+                    <div class="tech-label tech-label-dim" style="font-size: 10px; margin-bottom: 0.3rem;">${c.label}</div>
+                    <div class="percentile-metric-val">${(c.value || 0).toFixed(1)} <span class="unit-label">ms</span></div>
+                </div>
+            `).join('');
+        }
 
-        // Stage breakdown bars
         const breakdown = report.stage_breakdown || {};
         const maxMs = Math.max(...Object.values(breakdown), 1);
 
-        const stageColorMap = {
-            stt: '#818cf8',
-            guardrail_safety: '#f472b6',
-            guardrail_relevance: '#f472b6',
-            guardrail_confidence: '#f472b6',
-            retrieval: '#22d3ee',
-            fusion: '#a78bfa',
-            reranking: '#34d399',
-            generation: '#fbbf24',
-            grounding: '#fb923c',
-        };
-
-        els.stageBars.innerHTML = Object.entries(breakdown).map(([stage, ms]) => {
-            const pct = Math.max((ms / maxMs) * 100, 3);
-            const color = stageColorMap[stage] || '#818cf8';
-            return `
-                <div class="stage-row">
-                    <span class="stage-label">${stage.replace(/_/g, ' ')}</span>
-                    <div class="stage-bar-bg">
-                        <div class="stage-bar-fill" style="width: ${pct}%; background: ${color};">
-                            <span class="stage-bar-val">${ms.toFixed(1)} ms</span>
+        if (els.stageBars) {
+            els.stageBars.innerHTML = Object.entries(breakdown).map(([stage, ms]) => {
+                const pct = Math.max((ms / maxMs) * 100, 3);
+                return `
+                    <div class="stage-timing-item">
+                        <span class="stage-name-mono" style="width: 140px;">${stage.replace(/_/g, ' ').toUpperCase()}</span>
+                        <div class="stage-progress-bg" style="height: 18px;">
+                            <div class="stage-progress-bar bar-generation" style="width: ${pct}%;">
+                                <span class="stage-val-text">${ms.toFixed(1)} ms</span>
+                            </div>
                         </div>
-                    </div>
-                </div>`;
-        }).join('');
+                    </div>`;
+            }).join('');
+        }
     }
 
 })();
