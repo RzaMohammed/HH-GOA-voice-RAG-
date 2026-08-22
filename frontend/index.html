@@ -5,28 +5,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VoiceRAG — Precision Voice RAG Testing Dashboard</title>
-    <meta name="description" content="Voice-powered Retrieval-Augmented Generation testing dashboard with real-time latency telemetry, multilingual STT (Sarvam AI & ElevenLabs), and grounding verification.">
+    <meta name="description"
+        content="Voice-powered Retrieval-Augmented Generation testing dashboard with real-time latency telemetry and grounding verification.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260822">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Kalam:wght@700&family=Permanent+Marker&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=14">
 </head>
 
 <body>
     <!-- ═══ Background Subtle Grid ═══ -->
     <div class="grid-bg"></div>
 
-    <!-- ═══ 1. Top Navigation Bar ═══ -->
+    <!-- ═══ 1. Top Navigation Bar (Deduplicated Header Branding) ═══ -->
     <header class="top-navbar" id="header">
         <div class="navbar-container">
+            <!-- Logo: "Voice" in white bold, "RAG" in lime script -->
             <div class="navbar-brand">
-                <span class="brand-badge">LAB 02</span>
                 <div>
-                    <h1 class="brand-title">VoiceRAG</h1>
-                    <div class="brand-sub">HH GOA 2026 // VOICE-FIRST RAG</div>
+                    <h1 class="brand-title">
+                        <span class="brand-voice">Voice</span><span class="brand-rag">RAG</span>
+                    </h1>
+                    <div class="brand-sub">VOICE-FIRST RAG ENGINE</div>
                 </div>
             </div>
-            
+
             <nav class="nav-links" id="navTabs">
                 <button class="nav-link-item active" data-tab="search" id="tab-search">Ask</button>
                 <button class="nav-link-item" data-tab="pipeline" id="tab-pipeline">Pipeline</button>
@@ -36,11 +41,19 @@
             </nav>
 
             <div class="navbar-right">
-                <div class="ws-connection-indicator" id="wsStatusBadge" title="Real-time WebSocket connection">
-                    <span class="ws-dot"></span>
-                    <span class="ws-label">WS READY</span>
+                <!-- Single Authority Event Stamp Component -->
+                <div class="goa-badge-circle" title="Goa 2026 Edition">
+                    <span class="goa-palm-icon">🌴</span>
+                    <span class="goa-badge-text">GOA · 2026</span>
                 </div>
-                <button class="pill-badge-gradient" id="statusPill">HH GOA 2026</button>
+
+                <button class="user-icon-btn" title="User Profile">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                </button>
             </div>
         </div>
     </header>
@@ -51,79 +64,37 @@
         <!-- ── TAB 1: Search / Ask Dashboard ── -->
         <section class="tab-pane active" id="panel-search">
 
-            <!-- ── 2. Main Input Card (Cream #FAF6ED Focal Element) ── -->
+            <!-- ── 2. Main Input Card (Layered Goa Green) ── -->
             <div class="card-cream" id="mainInputCard">
-                <!-- Header row: mic icon in yellow circle + SPEECH-TO-TEXT label + Model Controls -->
+                <!-- Header row: mic icon in lime circle + SPEECH-TO-TEXT label + dropdown -->
                 <div class="input-card-header">
                     <div class="header-left-group">
-                        <button class="mic-circle-yellow" id="voiceStartBtn" title="Click to speak (Press Space or Click)">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        <button class="mic-circle-yellow" id="voiceStartBtn" title="Click to speak question">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                <line x1="12" x2="12" y1="19" y2="22" />
+                            </svg>
                         </button>
-                        <div>
-                            <span class="tech-label tech-label-dark">REAL-TIME MULTILINGUAL VOICE STREAM</span>
-                            <div class="voice-hint-sub">Talk naturally in Hindi, English, Bengali, Tamil, etc.</div>
-                        </div>
+                        <span class="tech-label tech-label-dark">SPEECH-TO-TEXT VOICE STREAM</span>
                     </div>
-
-                    <!-- Model and Provider Selection Controls Toolbar -->
-                    <div class="model-controls-toolbar">
-                        <!-- STT Model Selector -->
-                        <div class="custom-select-wrapper" title="Speech-to-Text Provider">
-                            <span class="select-prefix">STT:</span>
-                            <select class="custom-select" id="sttProviderSelect">
-                                <option value="auto" selected>Auto STT</option>
-                                <option value="sarvam">Sarvam AI (Saaras v2)</option>
-                                <option value="elevenlabs">ElevenLabs (Scribe v1)</option>
-                                <option value="browser">Browser WebSpeech</option>
-                                <option value="mock">Offline Mock</option>
-                            </select>
-                            <svg class="select-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-                        </div>
-
-                        <!-- Language Selector -->
-                        <div class="custom-select-wrapper" title="Voice Input & Answer Language">
-                            <span class="select-prefix">LANG:</span>
-                            <select class="custom-select" id="languageSelect">
-                                <option value="auto" selected>Auto Detect</option>
-                                <option value="hi">Hindi (हिन्दी)</option>
-                                <option value="en">English (EN)</option>
-                                <option value="bn">Bengali (বাংলা)</option>
-                                <option value="ta">Tamil (தமிழ்)</option>
-                                <option value="te">Telugu (తెలుగు)</option>
-                                <option value="mr">Marathi (मराठी)</option>
-                                <option value="gu">Gujarati (ગુજરાતી)</option>
-                                <option value="kn">Kannada (ಕನ್ನಡ)</option>
-                                <option value="ml">Malayalam (മലയാളം)</option>
-                            </select>
-                            <svg class="select-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-                        </div>
-
-                        <!-- Chunking Strategy Selector -->
-                        <div class="custom-select-wrapper" title="Chunking Strategy">
-                            <select class="custom-select" id="chunkingStrategySelect">
-                                <option value="adaptive" selected>Chunk: Adaptive</option>
-                                <option value="semantic">Chunk: Semantic</option>
-                                <option value="sentence">Chunk: Sentence</option>
-                                <option value="fixed">Chunk: Fixed</option>
-                            </select>
-                            <svg class="select-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-                        </div>
+                    <div class="custom-select-wrapper">
+                        <select class="custom-select" id="chunkingStrategySelect" title="Chunking Strategy">
+                            <option value="adaptive" selected>Chunking: Adaptive</option>
+                            <option value="semantic">Chunking: Semantic</option>
+                            <option value="sentence">Chunking: Sentence</option>
+                            <option value="fixed">Chunking: Fixed</option>
+                        </select>
+                        <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
                     </div>
                 </div>
 
-                <!-- Voice Settings Sub-bar: Auto-TTS Speaker Toggle -->
-                <div class="voice-options-bar">
-                    <label class="toggle-control" title="Automatically speak back the generated answer with Voice Synthesis">
-                        <input type="checkbox" id="autoTtsToggle">
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-text">🔊 Auto-Speak Answer (TTS)</span>
-                    </label>
-
-                    <div class="ws-protocol-tag" id="protocolBadge">
-                        <span class="tag-label">TRANSPORT:</span>
-                        <span class="tag-value" id="protocolVal">WEBSOCKET / STREAM</span>
-                    </div>
-                </div>
+                <!-- Section Divider Accent -->
+                <div class="section-highlight-accent"></div>
 
                 <!-- Voice Recording Active Visualizer Box -->
                 <div class="voice-stream-state" id="voiceStateListening" style="display: none;">
@@ -131,18 +102,17 @@
                         <div class="listening-bar-top">
                             <div class="listening-badge-live">
                                 <span class="live-dot-pink"></span>
-                                <span id="recordingStatusLabel">LISTENING... SPEAK YOUR QUESTION</span>
+                                <span>RECORDING AUDIO STREAM...</span>
                             </div>
                             <div class="recording-timer-mono" id="recordingTimer">00:00</div>
                         </div>
                         <div class="waveform-canvas-box" id="waveformContainer">
-                            <canvas id="waveformCanvas" width="600" height="44"></canvas>
+                            <canvas id="waveformCanvas" width="800" height="80"></canvas>
                         </div>
-                        <div class="listening-actions-row">
-                            <span class="speech-interim-text" id="liveInterimSpeech">Speak now... (Converting speech to text)</span>
+                        <div style="display: flex; justify-content: flex-end;">
                             <button class="btn-pill-stop" id="voiceStopBtn">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-                                STOP & FILL QUESTION
+                                <span style="display: inline-block; width: 8px; height: 8px; background: currentColor; border-radius: 1px; margin-right: 4px;"></span>
+                                STOP RECORDING
                             </button>
                         </div>
                     </div>
@@ -150,155 +120,191 @@
 
                 <!-- Voice Transcription Review Box -->
                 <div class="voice-stream-state" id="voiceStateReview" style="display: none;">
-                    <div style="background: var(--cream-surface-alt); border: 1px solid var(--cream-border); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.85rem;">
-                        <div class="tech-label tech-label-muted" style="margin-bottom: 0.4rem;">TRANSCRIBED VOICE INPUT</div>
-                        <div id="transcriptionText" style="font-size: 14px; font-weight: 500; color: var(--cream-text-body); margin-bottom: 0.6rem;">Transcribing...</div>
+                    <div
+                        style="background: var(--layer-inner); border: 1px solid var(--border-inner); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.85rem;">
+                        <div class="tech-label tech-label-muted" style="margin-bottom: 0.4rem;">TRANSCRIBED VOICE INPUT
+                        </div>
+                        <div id="transcriptionText"
+                            style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 0.6rem;">
+                            Transcribing...</div>
                         <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
-                            <button id="btnRetryVoice" style="background: none; border: 1px solid var(--cream-border); padding: 0.35rem 0.85rem; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; color: var(--cream-text-secondary);">RETRY</button>
-                            <button id="btnRunRag" style="background: var(--accent-pink); color: #fff; border: none; padding: 0.35rem 1rem; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer;">SUBMIT QUESTION →</button>
+                            <button id="btnRetryVoice"
+                                style="background: none; border: 1px solid var(--border-inner); padding: 0.35rem 0.85rem; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; color: var(--text-secondary);">RETRY</button>
+                            <button id="btnRunRag"
+                                style="background: var(--gradient-cta); color: var(--text-dark); border: none; padding: 0.35rem 1rem; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; font-weight: 800; cursor: pointer;">RUN
+                                RAG →</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Text Input Row with Pink Pill Primary CTA -->
+                <!-- Text Input Row with Primary Button Gradient -->
                 <div class="input-action-row">
                     <div class="query-input-field-wrap">
-                        <svg class="input-icon-search" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" id="queryInput" class="query-input-core" placeholder="Speak with Mic above or type your question here in Hindi, English, etc..." autocomplete="off" spellcheck="false">
+                        <svg class="input-icon-search" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.35-4.35" />
+                        </svg>
+                        <input type="text" id="queryInput" class="query-input-core"
+                            placeholder="Type your query or click the mic to speak..." autocomplete="off"
+                            spellcheck="false">
                     </div>
-                    <button class="btn-cta-pink" id="searchBtn">
-                        Submit Question →
+                    <!-- Primary Hero Button CTA -->
+                    <button class="btn-cta-primary" id="searchBtn">
+                        Run RAG Pipeline →
                     </button>
                 </div>
 
-                <!-- Quick Test Presets: wrapped row of pill buttons (dark green fill, yellow text) -->
+                <!-- Quick Test Presets (Dark Green Pills, Lime on Hover) -->
                 <div class="presets-container">
                     <span class="presets-label">Quick Test Presets:</span>
                     <button class="preset-pill-btn" data-query="What is the capital of India?">What is the capital of India?</button>
-                    <button class="preset-pill-btn" data-query="भारत का राष्ट्रीय पक्षी कौन सा है?">भारत का राष्ट्रीय पक्षी?</button>
                     <button class="preset-pill-btn" data-query="How does photosynthesis work?">How does photosynthesis work?</button>
+                    <button class="preset-pill-btn" data-query="भारत का राष्ट्रीय पक्षी कौन सा है?">भारत का राष्ट्रीय पक्षी?</button>
                     <button class="preset-pill-btn" data-query="ताजमहल कहाँ स्थित है और किसने बनवाया?">ताजमहल कहाँ स्थित है?</button>
                     <button class="preset-pill-btn" data-query="What are the benefits of machine learning?">Benefits of machine learning</button>
                 </div>
+            </div>
 
-            <!-- ── 3. Two-Column Section (Synthesized Answer + Latency Telemetry) ── -->
+            <!-- ── 3. Rebalanced Two-Column Section (62% Answer / 38% Telemetry) ── -->
             <div class="two-column-dashboard">
-                
-                <!-- Left (wider): Synthesized RAG Answer Cream Card -->
+
+                <!-- Left (62% Dominant): Synthesized RAG Answer Card -->
                 <div class="answer-panel-card" id="resultsSection">
                     <div class="answer-card-header">
                         <div class="answer-header-left">
                             <button class="audio-play-btn" id="audioPlaybackBtn" title="Play Synthesized Answer Audio">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                                <span class="audio-btn-label">SPEAK</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                </svg>
                             </button>
                             <span class="tech-label tech-label-dark">SYNTHESIZED RAG ANSWER</span>
                         </div>
-                        <div class="guardrail-status-pill" id="groundingBadge">
+                        <div class="guardrail-status-pill" id="groundingBadge" style="display: none;">
                             <span class="guardrail-dot"></span>
                             <span class="guardrail-badge-text">Guardrails Passed</span>
                         </div>
                     </div>
 
-                    <div class="answer-content-body" id="answerBody">
-                        Ask a question above or click the microphone to test live multilingual voice-enabled RAG.
+                    <!-- Designed Empty Answer State Motif -->
+                    <div class="answer-empty-state" id="answerEmptyState">
+                        <div class="answer-empty-icon-wrap">
+                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                <line x1="12" x2="12" y1="19" y2="22"/>
+                            </svg>
+                        </div>
+                        <div class="answer-empty-heading">Knowledge Synthesizer Ready</div>
+                        <p class="answer-empty-desc">Speak into the microphone or click a preset above. Context-grounded answers and citations will synthesize here in real time.</p>
                     </div>
 
+                    <!-- Answer Body (Populated dynamically on query) -->
+                    <div class="answer-content-body" id="answerBody" style="display: none;"></div>
+
+                    <!-- Metadata Footer -->
                     <div class="answer-meta-footer" id="answerMeta" style="display: none;">
                         <span class="meta-mono-tag" id="metaProvider">Provider: --</span>
-                        <span class="meta-mono-tag" id="metaStt">STT: --</span>
                         <span class="meta-mono-tag" id="metaTokens">Tokens: --</span>
                         <span class="meta-mono-tag" id="metaGenTime">Gen: -- ms</span>
                     </div>
                 </div>
 
-                <!-- Right (narrower): Latency Telemetry Dark Green Card -->
+                <!-- Right (38% Secondary): Latency Telemetry Dark Green Card -->
                 <div class="telemetry-dark-card">
                     <div class="telemetry-card-top">
-                        <span class="tech-label tech-label-yellow">LATENCY TELEMETRY</span>
+                        <span class="tech-label tech-label-dim">LATENCY TELEMETRY</span>
                         <span class="target-badge-gold">⚡ &lt;200ms TARGET</span>
                     </div>
 
-                    <!-- Big Headline Metric: End-to-End Latency -->
-                    <div class="headline-metric-box">
-                        <div class="headline-label">TOTAL PIPELINE LATENCY</div>
-                        <div class="headline-number-gold" id="telemetryTotal">-- <span class="unit-label">ms</span></div>
+                    <!-- Section Divider Accent -->
+                    <div class="section-highlight-accent"></div>
+
+                    <!-- Explicit Telemetry Empty State -->
+                    <div class="telemetry-empty-state" id="telemetryEmptyState">
+                        <svg class="telemetry-empty-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <div class="telemetry-empty-title">Awaiting Query Execution</div>
+                        <p class="telemetry-empty-text">Run a query to see latency breakdown & pipeline telemetry.</p>
                     </div>
 
-                    <!-- Pipeline Stages Timing Breakdown List -->
-                    <div class="stages-timing-list" id="waterfall">
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">STT</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-stt" id="barStt" style="width: 15%;">
-                                    <span class="stage-val-text" id="valStt">-- ms</span>
+                    <!-- Dynamic Telemetry Content (Hidden until query execution) -->
+                    <div id="telemetryDataContent" style="display: none;">
+                        <!-- Big Headline Metric: End-to-End Latency -->
+                        <div class="headline-metric-box">
+                            <div class="headline-label">TOTAL LATENCY</div>
+                            <div class="headline-number-gold" id="telemetryTotal">-- <span class="unit-label">ms</span></div>
+                        </div>
+
+                        <!-- Pipeline Stage Timing Breakdown List -->
+                        <div class="stages-timing-list" id="waterfall">
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">STT</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barStt" style="width: 10%;">
+                                        <span class="stage-val-text" id="valStt">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">GUARDRAIL</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-guardrail" id="barGuard" style="width: 20%;">
-                                    <span class="stage-val-text" id="valGuard">-- ms</span>
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">GUARDRAILS</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barGuard" style="width: 10%;">
+                                        <span class="stage-val-text" id="valGuard">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">RETRIEVAL</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-retrieval" id="barRet" style="width: 45%;">
-                                    <span class="stage-val-text" id="valRet">-- ms</span>
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">RETRIEVAL</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barRet" style="width: 10%;">
+                                        <span class="stage-val-text" id="valRet">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">RERANK</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-rerank" id="barRerank" style="width: 30%;">
-                                    <span class="stage-val-text" id="valRerank">-- ms</span>
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">RERANK</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barRerank" style="width: 10%;">
+                                        <span class="stage-val-text" id="valRerank">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">GENERATION</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-generation" id="barGen" style="width: 65%;">
-                                    <span class="stage-val-text" id="valGen">-- ms</span>
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">GENERATION</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barGen" style="width: 10%;">
+                                        <span class="stage-val-text" id="valGen">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">GROUNDING</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-grounding" id="barGround" style="width: 25%;">
-                                    <span class="stage-val-text" id="valGround">-- ms</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="stage-timing-item">
-                            <span class="stage-name-mono">TTS VOICE</span>
-                            <div class="stage-progress-bg">
-                                <div class="stage-progress-bar bar-tts" id="barTts" style="width: 20%;">
-                                    <span class="stage-val-text" id="valTts">-- ms</span>
+                            <div class="stage-timing-item">
+                                <span class="stage-name-mono">GROUNDING</span>
+                                <div class="stage-progress-bg">
+                                    <div class="stage-progress-bar" id="barGround" style="width: 10%;">
+                                        <span class="stage-val-text" id="valGround">-- ms</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                    <!-- Component Status Indicators -->
+                    <!-- Component Status List -->
                     <div class="component-status-list">
                         <div class="component-status-item">
-                            <span class="status-dot-sm" id="dotStt"></span>
-                            <span class="component-status-text" id="statusSttLabel">STT: SARVAM / ELEVENLABS</span>
+                            <span class="status-dot-sm"></span>
+                            <span class="component-status-text">SPEECH-TO-TEXT ONLINE</span>
                         </div>
                         <div class="component-status-item">
-                            <span class="status-dot-sm" id="dotDb"></span>
-                            <span class="component-status-text" id="statusDbLabel">VECTOR DB: FAISS + BM25</span>
+                            <span class="status-dot-sm"></span>
+                            <span class="component-status-text">VECTOR SEARCH ONLINE</span>
                         </div>
                         <div class="component-status-item">
-                            <span class="status-dot-sm" id="dotLlm"></span>
-                            <span class="component-status-text" id="statusLlmLabel">LLM: GROUNDED GENERATION</span>
+                            <span class="status-dot-sm"></span>
+                            <span class="component-status-text">LLM ONLINE</span>
                         </div>
                     </div>
                 </div>
@@ -308,11 +314,12 @@
             <!-- ── 4. Retrieved Vector Context Chunks Section ── -->
             <div class="context-chunks-panel">
                 <div class="context-chunks-header">
-                    <span class="tech-label tech-label-yellow">RETRIEVED VECTOR DATABASE PASSAGES</span>
+                    <span class="tech-label tech-label-dim">RETRIEVED VECTOR CONTEXT CHUNKS</span>
                     <span class="tech-label-dim" id="chunksCountLabel">0 CHUNKS LOADED</span>
                 </div>
+
                 <div class="chunks-grid" id="passagesGrid">
-                    <div class="empty-chunks-msg">No context chunks retrieved yet. Execute a query to view vector database matches.</div>
+                    <div class="empty-chunks-msg">No context chunks retrieved yet. Execute a query to view vector matches.</div>
                 </div>
             </div>
 
@@ -322,21 +329,20 @@
         <section class="tab-pane" id="panel-pipeline">
             <div class="dark-panel-card">
                 <div class="context-chunks-header">
-                    <span class="tech-label tech-label-yellow">DETAILED PIPELINE WATERFALL & TRACE</span>
+                    <span class="tech-label tech-label-dim">DETAILED PIPELINE WATERFALL & TRACE</span>
                     <span class="tech-label-dim" id="totalLatencyTrace">-- ms</span>
                 </div>
-                <div id="waterfallFull" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <div id="waterfallFull" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
                     <div class="empty-chunks-msg">No pipeline traces recorded yet. Run a query from the Ask tab.</div>
                 </div>
             </div>
-
         </section>
 
         <!-- ── TAB 3: Retrieval Inspection ── -->
         <section class="tab-pane" id="panel-retrieval">
             <div class="dark-panel-card">
                 <div class="context-chunks-header">
-                    <span class="tech-label tech-label-yellow">DENSE & HYBRID RETRIEVAL INSPECTOR</span>
+                    <span class="tech-label tech-label-dim">DENSE & HYBRID RETRIEVAL INSPECTOR</span>
                 </div>
                 <div id="retrievalInspectorGrid" class="chunks-grid">
                     <div class="empty-chunks-msg">Execute a query to inspect dense FAISS, BM25, and cross-encoder scores.</div>
@@ -348,7 +354,7 @@
         <section class="tab-pane" id="panel-analytics">
             <div class="dark-panel-card">
                 <div class="context-chunks-header">
-                    <span class="tech-label tech-label-yellow">LATENCY BENCHMARK HARNESS (P50 / P70 / P100)</span>
+                    <span class="tech-label tech-label-dim">LATENCY BENCHMARK HARNESS (P50 / P70 / P100)</span>
                 </div>
                 <div class="benchmark-form-row">
                     <label class="bench-field-label">
@@ -359,13 +365,13 @@
                         <span class="tech-label-dim">WARMUP</span>
                         <input type="number" id="benchNumWarmup" value="2" min="0" max="10" class="bench-field-input">
                     </label>
-                    <button class="btn-cta-pink" id="runBenchBtn" style="padding: 0.5rem 1.4rem;">
+                    <button class="btn-cta-primary" id="runBenchBtn" style="padding: 0.5rem 1.4rem;">
                         Run Benchmark
                     </button>
                 </div>
                 <div id="benchResults" style="display: none;">
                     <div class="percentile-metrics-grid" id="percentileCards"></div>
-                    <div class="tech-label tech-label-yellow" style="margin-bottom: 0.6rem;">STAGE BREAKDOWN (AVG MS)</div>
+                    <div class="tech-label tech-label-dim" style="margin-bottom: 0.6rem;">STAGE BREAKDOWN (AVG MS)</div>
                     <div id="stageBars" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
                 </div>
             </div>
@@ -375,39 +381,39 @@
         <section class="tab-pane" id="panel-guardrails">
             <div class="dark-panel-card">
                 <div class="context-chunks-header">
-                    <span class="tech-label tech-label-yellow">GUARDRAILS & MODERATION POLICIES</span>
+                    <span class="tech-label tech-label-dim">GUARDRAILS & MODERATION POLICIES</span>
                 </div>
-                <div class="guardrails-tiles-grid">
+                <div class="guardrails-tiles-grid" style="margin-top: 1rem;">
                     <div class="guardrail-tile-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span class="status-dot-sm"></span>
-                            <span class="tech-label tech-label-yellow">SAFETY GUARDRAILS</span>
+                            <span class="tech-label tech-label-dim">SAFETY GUARDRAILS</span>
                         </div>
-                        <p style="font-size: 13px; color: var(--text-on-dark-secondary);">Filters prompt injection, jailbreaks, toxicity, and malicious inputs.</p>
+                        <p style="font-size: 13px; color: var(--text-nav);">Filters prompt injection, jailbreaks, toxicity, and malicious inputs.</p>
                         <div class="guardrail-tile-status-tag">ACTIVE (THRESHOLD: 0.85)</div>
                     </div>
                     <div class="guardrail-tile-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span class="status-dot-sm"></span>
-                            <span class="tech-label tech-label-yellow">RELEVANCE GATE</span>
+                            <span class="tech-label tech-label-dim">RELEVANCE GATE</span>
                         </div>
-                        <p style="font-size: 13px; color: var(--text-on-dark-secondary);">Filters low-relevance queries prior to expensive index retrieval scans.</p>
+                        <p style="font-size: 13px; color: var(--text-nav);">Filters low-relevance queries prior to expensive index retrieval scans.</p>
                         <div class="guardrail-tile-status-tag">ACTIVE (THRESHOLD: 0.30)</div>
                     </div>
                     <div class="guardrail-tile-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span class="status-dot-sm"></span>
-                            <span class="tech-label tech-label-yellow">CONFIDENCE GATING</span>
+                            <span class="tech-label tech-label-dim">CONFIDENCE GATING</span>
                         </div>
-                        <p style="font-size: 13px; color: var(--text-on-dark-secondary);">Rejects retrieval below minimum confidence to prevent hallucinations.</p>
+                        <p style="font-size: 13px; color: var(--text-nav);">Rejects retrieval below minimum confidence to prevent hallucinations.</p>
                         <div class="guardrail-tile-status-tag">ACTIVE (MIN SCORE: 0.25)</div>
                     </div>
                     <div class="guardrail-tile-card">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span class="status-dot-sm"></span>
-                            <span class="tech-label tech-label-yellow">NLI GROUNDING CHECK</span>
+                            <span class="tech-label tech-label-dim">NLI GROUNDING CHECK</span>
                         </div>
-                        <p style="font-size: 13px; color: var(--text-on-dark-secondary);">Cross-references generated answer claims against retrieved passages.</p>
+                        <p style="font-size: 13px; color: var(--text-nav);">Cross-references generated answer claims against retrieved passages.</p>
                         <div class="guardrail-tile-status-tag">ACTIVE (NLI THRESHOLD: 0.60)</div>
                     </div>
                 </div>
@@ -416,19 +422,18 @@
 
     </main>
 
-    <!-- ═══ 5. Fixed Bottom Status Bar ═══ -->
+    <!-- ═══ 5. Consolidated Footer Status Bar ═══ -->
     <footer class="fixed-status-bar">
-        <div class="status-bar-pills">
-            <div class="status-bar-item"><span class="status-dot-gold"></span>SPEECH-TO-TEXT: SARVAM / ELEVENLABS</div>
-            <div class="status-bar-item"><span class="status-dot-gold"></span>EMBEDDINGS: PARAPHRASE-MULTILINGUAL</div>
-            <div class="status-bar-item"><span class="status-dot-gold"></span>VECTOR DB: FAISS + BM25 HYBRID</div>
-            <div class="status-bar-item"><span class="status-dot-gold"></span>LLM: GROUNDED & VERIFIED</div>
-            <div class="status-bar-item"><span class="status-dot-gold"></span>GUARDRAILS: 4-LAYER ACTIVE</div>
+        <div class="system-status-aggregate" id="systemStatusAggregate"
+            title="STT: ONLINE • Embedder: ONLINE • Vector DB: ONLINE • LLM: ONLINE • Guardrails: ONLINE">
+            <span class="status-dot-pulse"></span>
+            <span class="status-aggregate-text">ALL SYSTEMS OPERATIONAL</span>
+            <span class="status-aggregate-sub">5/5 Services Online</span>
         </div>
-        <div class="status-bar-coords">HH GOA 2026 // VOICE RAG</div>
+        <div class="footer-easter-egg">// built in goa · sun. sand. code.</div>
     </footer>
 
-    <script src="app.js?v=20260822c"></script>
+    <script src="app.js?v=14"></script>
 </body>
 
 </html>
