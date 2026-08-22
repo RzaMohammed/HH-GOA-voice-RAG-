@@ -60,6 +60,7 @@
 
         // Answer & Grounding
         resultsSection: $('#resultsSection'),
+        answerEmptyState: $('#answerEmptyState'),
         answerBody: $('#answerBody'),
         audioPlaybackBtn: $('#audioPlaybackBtn'),
         groundingBadge: $('#groundingBadge'),
@@ -94,7 +95,7 @@
         chunksCountLabel: $('#chunksCountLabel'),
         retrievalInspectorGrid: $('#retrievalInspectorGrid'),
 
-        // Benchmark
+        // Benchmark Harness
         benchNumQueries: $('#benchNumQueries'),
         benchNumWarmup: $('#benchNumWarmup'),
         runBenchBtn: $('#runBenchBtn'),
@@ -674,19 +675,118 @@
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 128.0;
-                const y = (v * canvas.height) / 2;
+                sum += freqArray[i];
+            }
+            const avgVolume = sum / (bufferLength * 255); // 0.0 to 1.0
 
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-                x += sliceWidth;
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerY = height / 2;
+
+            // Deep background with subtle ambient radial glow
+            ctx.fillStyle = '#030510';
+            ctx.fillRect(0, 0, width, height);
+
+            // Ambient background glow
+            const bgGlow = ctx.createRadialGradient(width * 0.5, centerY, 10, width * 0.5, centerY, width * 0.4);
+            bgGlow.addColorStop(0, 'rgba(6, 182, 212, 0.1)');
+            bgGlow.addColorStop(0.5, 'rgba(236, 72, 153, 0.06)');
+            bgGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = bgGlow;
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+
+            // Helper function to draw a symmetric organic glowing wave layer
+            function drawWaveLayer(color, speed, freqMul, ampMul, spikeWeight, shiftX) {
+                ctx.beginPath();
+                ctx.fillStyle = color;
+
+                const pointsTop = [];
+                const pointsBottom = [];
+                const step = 4;
+
+                for (let x = 0; x <= width; x += step) {
+                    const normX = x / width; // 0.0 to 1.0
+                    // Tapered envelope (zero at ends, max in center)
+                    const envelope = Math.sin(normX * Math.PI);
+                    const envPow = Math.pow(envelope, 1.3);
+
+                    // Sample audio frequencies
+                    const audioIdx = Math.floor(normX * (bufferLength * 0.6)) % bufferLength;
+                    const audioSample = (freqArray[audioIdx] / 255) * 1.5;
+                    const timeSample = (timeArray[audioIdx] - 128) / 128;
+
+                    // Organic sine oscillation + sharp spike simulation
+                    const wave1 = Math.sin((normX * 18 * freqMul) + phase * speed + shiftX);
+                    const wave2 = Math.sin((normX * 38 * freqMul) - phase * (speed * 0.8) + shiftX);
+                    const wave3 = Math.cos((normX * 64 * freqMul) + phase * (speed * 1.2));
+                    
+                    // Spike needle effect matching reference image
+                    const spike = Math.pow(Math.abs(Math.sin((normX * 24) + shiftX)), 5) * (audioSample + 0.3) * spikeWeight;
+                    
+                    const idleBase = (wave1 * 3 + wave2 * 2 + 3);
+                    const voiceBoost = (avgVolume * 24 + audioSample * 18 + Math.abs(timeSample) * 12);
+                    const halfH = Math.max(1, (idleBase + voiceBoost + spike * 20) * envPow * ampMul);
+
+                    pointsTop.push({ x: x, y: centerY - halfH });
+                    pointsBottom.push({ x: x, y: centerY + halfH });
+                }
+
+                // Construct top path
+                ctx.moveTo(pointsTop[0].x, pointsTop[0].y);
+                for (let i = 1; i < pointsTop.length; i++) {
+                    ctx.lineTo(pointsTop[i].x, pointsTop[i].y);
+                }
+                // Construct bottom mirror path in reverse
+                for (let i = pointsBottom.length - 1; i >= 0; i--) {
+                    ctx.lineTo(pointsBottom[i].x, pointsBottom[i].y);
+                }
+                ctx.closePath();
+                ctx.fill();
             }
 
-            ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.stroke();
-        }
+            // 1. Layer 1: Teal / Cyan (#18B9A5) to Soft Blue (#6F6AD9) Wave
+            const cyanGrad = ctx.createLinearGradient(0, 0, width, 0);
+            cyanGrad.addColorStop(0, 'rgba(24, 185, 165, 0.75)');
+            cyanGrad.addColorStop(0.4, 'rgba(32, 184, 216, 0.7)');
+            cyanGrad.addColorStop(0.8, 'rgba(111, 106, 217, 0.55)');
+            cyanGrad.addColorStop(1, 'rgba(111, 106, 217, 0.2)');
+            drawWaveLayer(cyanGrad, 1.2, 1.0, 1.1, 1.2, 0.5);
 
-        draw();
+            // 2. Layer 2: Soft Blue (#6F6AD9) to Lavender Pink (#D06AD7) Wave (Center overlap)
+            const purpleGrad = ctx.createLinearGradient(0, 0, width, 0);
+            purpleGrad.addColorStop(0.1, 'rgba(111, 106, 217, 0.35)');
+            purpleGrad.addColorStop(0.5, 'rgba(208, 106, 215, 0.75)');
+            purpleGrad.addColorStop(0.9, 'rgba(232, 79, 145, 0.4)');
+            drawWaveLayer(purpleGrad, 0.9, 1.3, 1.0, 1.4, 2.2);
+
+            // 3. Layer 3: Vibrant Pink (#D06AD7) to Magenta (#E84F91) Wave (Right-shifted peaks)
+            const pinkGrad = ctx.createLinearGradient(0, 0, width, 0);
+            pinkGrad.addColorStop(0.2, 'rgba(208, 106, 215, 0.25)');
+            pinkGrad.addColorStop(0.65, 'rgba(232, 79, 145, 0.8)');
+            pinkGrad.addColorStop(1, 'rgba(232, 79, 145, 0.9)');
+            drawWaveLayer(pinkGrad, 1.4, 1.1, 1.2, 1.5, 4.0);
+
+            // 4. Center Core Brightness Line
+            const lineGrad = ctx.createLinearGradient(0, 0, width, 0);
+            lineGrad.addColorStop(0, 'rgba(24, 185, 165, 0)');
+            lineGrad.addColorStop(0.2, 'rgba(24, 185, 165, 0.85)');
+            lineGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+            lineGrad.addColorStop(0.8, 'rgba(232, 79, 145, 0.85)');
+            lineGrad.addColorStop(1, 'rgba(232, 79, 145, 0)');
+
+            ctx.strokeStyle = lineGrad;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+        render();
     }
 
     async function handleRecordedAudio(audioBlob) {
@@ -783,6 +883,7 @@
         if (data.stt_result && data.stt_result.text && els.queryInput) {
             els.queryInput.value = data.stt_result.text;
         }
+    }
 
         // 3. Guardrails & Grounding badge
         if (els.groundingBadge) {
@@ -818,6 +919,11 @@
                 if (els.groundingText) els.groundingText.textContent = 'Guardrails Passed';
             }
         }
+        if (els.telemetryEmptyState) els.telemetryEmptyState.style.display = 'none';
+        if (els.telemetryDataContent) els.telemetryDataContent.style.display = 'block';
+        if (els.telemetryTotal) els.telemetryTotal.innerHTML = `-- <span class="unit-label">ms</span>`;
+        if (els.answerMeta) els.answerMeta.style.display = 'none';
+    }
 
         // 4. Metadata footer
         if (els.answerMeta) {
