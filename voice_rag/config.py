@@ -24,20 +24,15 @@ INDEX_DIR = PROJECT_ROOT / "index_cache"
 class Settings(BaseSettings):
     """Single source of truth for every tunable knob."""
 
-    # ── LLM Providers ───────────────────────────────────────────────────
-    gemini_api_key: str = ""
-    groq_api_key: str = ""
-    openai_api_key: str = ""
-
-    # ── Voice / STT ─────────────────────────────────────────────────────
+    # ── Providers (Sarvam AI & ElevenLabs) ──────────────────────────────
     sarvam_api_key: str = ""
     elevenlabs_api_key: str = ""
 
     # ── Model Choices ───────────────────────────────────────────────────
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    embedding_model: str = "finetuned_multilingual_embedder"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    llm_provider: Literal["gemini", "groq", "openai", "mock"] = "mock"
-    llm_model: str = "gemini-2.0-flash"
+    llm_provider: Literal["sarvam", "mock"] = "sarvam"
+    sarvam_llm_model: str = "sarvam-105b"
 
     # ── Dataset ─────────────────────────────────────────────────────────
     dataset_name: str = "ai4bharat/MSMARCO-XI"

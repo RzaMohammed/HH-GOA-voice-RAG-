@@ -40,9 +40,7 @@ class GroundingStatus(str, Enum):
 
 
 class LLMProvider(str, Enum):
-    GEMINI = "gemini"
-    GROQ = "groq"
-    OPENAI = "openai"
+    SARVAM = "sarvam"
     MOCK = "mock"
 
 
@@ -190,6 +188,8 @@ class PipelineResponse(BaseModel):
     final_answer: str = ""
     is_refused: bool = False
     refusal_reason: str = ""
+    audio_base64: Optional[str] = None
+    audio_mime_type: Optional[str] = None
     latency: LatencyTrace = Field(default_factory=LatencyTrace)
 
 

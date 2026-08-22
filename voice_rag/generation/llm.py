@@ -1,50 +1,67 @@
 """
-Multi-provider LLM interface.
+LLM Generation Module.
 
-Supports Gemini, Groq, OpenAI, and a deterministic zero-latency mock
-for offline testing and latency benchmarking. All providers expose a
-unified ``generate()`` method returning a ``GenerationResult``.
+Exclusively powered by Sarvam AI (sarvam-105b, sarvam-2b) and an intelligent
+local extractive QA fallback with citation generation.
 """
 
 from __future__ import annotations
 
+import re
 import time
-from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
 from loguru import logger
 
 from voice_rag.config import get_settings
-from voice_rag.generation.prompts import SYSTEM_PROMPT, build_user_prompt
-from voice_rag.pipeline.schemas import GenerationResult, LLMProvider, RetrievedChunk
+from voice_rag.pipeline.schemas import GenerationResult, RetrievedChunk
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Base class
-# ═══════════════════════════════════════════════════════════════════════════
+SYSTEM_PROMPT = """You are an accurate, helpful multilingual AI assistant specialized in Indian knowledge and general facts.
+Answer the user's question using ONLY the provided context passages.
+If the context does not contain enough information to answer the question, state:
+"I don't have enough information in the provided knowledge base to answer this question."
 
-class BaseLLM(ABC):
-    """Abstract base for LLM providers."""
+Rules:
+1. Answer directly and concisely in the same language as the question (Hindi, English, etc.).
+2. Do not hallucinate or use outside knowledge not present in the passages.
+3. Cite sources using [Passage 1], [Passage 2], etc.
+"""
+
+
+def build_user_prompt(query: str, chunks: Sequence[RetrievedChunk]) -> str:
+    """Format retrieved chunks and query into an LLM prompt with numbered citations."""
+    context_parts: list[str] = []
+    for i, item in enumerate(chunks, 1):
+        context_parts.append(f"[Passage {i}]:\n{item.chunk.text.strip()}")
+
+    context_str = "\n\n".join(context_parts)
+    return f"Context:\n{context_str}\n\nQuestion: {query}\n\nAnswer:"
+
+
+class BaseLLM:
+    """Abstract base class for LLM providers."""
 
     provider_name: str = "base"
 
-    @abstractmethod
     def generate(
         self,
         query: str,
         chunks: Sequence[RetrievedChunk],
         system_prompt: Optional[str] = None,
     ) -> GenerationResult:
-        """Generate a grounded answer from the query and retrieved chunks."""
-        ...
+        raise NotImplementedError
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Mock LLM (zero latency, deterministic)
+# Mock & Local Extractive LLM
 # ═══════════════════════════════════════════════════════════════════════════
 
 class MockLLM(BaseLLM):
-    """Deterministic mock LLM for testing and benchmarking."""
+    """
+    Intelligent local extractive QA engine and deterministic fallback.
+    Dynamically extracts relevant answers from retrieved database chunks.
+    """
 
     provider_name = "mock"
 
@@ -54,43 +71,101 @@ class MockLLM(BaseLLM):
         chunks: Sequence[RetrievedChunk],
         system_prompt: Optional[str] = None,
     ) -> GenerationResult:
+        t0 = time.perf_counter()
+
         if not chunks:
             answer = "I don't have enough information in the provided knowledge base to answer this question."
+            return GenerationResult(
+                answer=answer,
+                provider="mock",
+                model="local-extractive-v1",
+                prompt_tokens=len(query.split()),
+                completion_tokens=len(answer.split()),
+                generation_time_ms=0.1,
+            )
+
+        # Extract words from query (ignoring common stop words)
+        stop_words = {"what", "is", "the", "of", "and", "in", "to", "are", "how", "does", "who", "where", "which", "a", "an", "for", "tell", "me", "about", "कहाँ", "कौन", "क्या", "है", "का", "की", "के", "में", "से", "पर", "और", "बारे", "बताओ"}
+        query_words = set(w.lower() for w in re.split(r'[\s,.?!]+', query) if w.lower() and w.lower() not in stop_words)
+
+        selected_sentences: list[tuple[str, int, float]] = []
+
+        for idx, item in enumerate(chunks[:4]):
+            passage_text = item.chunk.text.strip()
+            sentences = re.split(r'(?<=[.?!।])\s+', passage_text)
+
+            for s in sentences:
+                s_clean = s.strip()
+                if len(s_clean) < 12:
+                    continue
+                s_words = set(re.split(r'[\s,.?!]+', s_clean.lower()))
+                overlap = len(query_words.intersection(s_words))
+                if query_words and overlap > 0:
+                    score = overlap + (item.rerank_score * 0.5 if item.rerank_score else 0.5)
+                    selected_sentences.append((s_clean, idx + 1, score))
+
+        if selected_sentences:
+            selected_sentences.sort(key=lambda x: x[2], reverse=True)
+            top_sentences = []
+            seen_texts = set()
+            for s_text, p_num, _ in selected_sentences[:3]:
+                if s_text not in seen_texts:
+                    top_sentences.append(f"{s_text} [Passage {p_num}]")
+                    seen_texts.add(s_text)
+            answer = " ".join(top_sentences)
         else:
-            top_text = chunks[0].chunk.text[:200]
-            answer = f"Based on the retrieved passages: {top_text}... [Passage 1]"
+            top_text = chunks[0].chunk.text.strip()
+            answer = f"{top_text} [Passage 1]"
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         return GenerationResult(
             answer=answer,
             provider="mock",
-            model="mock-v1",
+            model="local-extractive-v1",
             prompt_tokens=len(query.split()),
             completion_tokens=len(answer.split()),
-            generation_time_ms=0.1,
+            generation_time_ms=max(0.5, elapsed_ms),
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Gemini LLM
+# Sarvam AI LLM
 # ═══════════════════════════════════════════════════════════════════════════
 
-class GeminiLLM(BaseLLM):
-    """Google Gemini API provider."""
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
 
-    provider_name = "gemini"
 
-    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
+class SarvamLLM(BaseLLM):
+    """Sarvam AI LLM provider (supporting sarvam-105b, sarvam-2b)."""
+
+    provider_name = "sarvam"
+
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+    ):
         cfg = get_settings()
-        self.model_name = model or cfg.llm_model
-        self.api_key = api_key or cfg.gemini_api_key
+        self.model_name = model or cfg.sarvam_llm_model
+        self.api_key = api_key or cfg.sarvam_api_key
+        self.temperature = temperature
+        self.max_tokens = max_tokens
 
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY is required for Gemini provider")
+            raise ValueError("SARVAM_API_KEY is required for Sarvam LLM provider")
 
-        import google.generativeai as genai
-        genai.configure(api_key=self.api_key)
-        self._model = genai.GenerativeModel(self.model_name)
-        logger.info(f"Gemini LLM initialised: {self.model_name}")
+        # Try to initialize official SarvamAI SDK
+        self._sdk_client = None
+        try:
+            from sarvamai import SarvamAI
+            self._sdk_client = SarvamAI(api_subscription_key=self.api_key)
+        except Exception as e:
+            logger.debug(f"Sarvam SDK client initialization: {e}")
+
+        logger.info(f"Sarvam LLM initialised: {self.model_name}")
 
     def generate(
         self,
@@ -98,133 +173,67 @@ class GeminiLLM(BaseLLM):
         chunks: Sequence[RetrievedChunk],
         system_prompt: Optional[str] = None,
     ) -> GenerationResult:
+        import httpx
         user_prompt = build_user_prompt(query, chunks)
-        sys = system_prompt or SYSTEM_PROMPT
+        sys_prompt = system_prompt or SYSTEM_PROMPT
 
         t0 = time.perf_counter()
-        response = self._model.generate_content(
-            f"{sys}\n\n{user_prompt}",
-            generation_config={"temperature": 0.1, "max_output_tokens": 1024},
-        )
-        elapsed_ms = (time.perf_counter() - t0) * 1000
 
-        answer = response.text or ""
-        usage = getattr(response, "usage_metadata", None)
+        # Try SDK first
+        if self._sdk_client:
+            try:
+                res = self._sdk_client.chat.completions(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=self.temperature,
+                )
+                elapsed_ms = (time.perf_counter() - t0) * 1000
+                answer = res.choices[0].message.content if res.choices else ""
+                return GenerationResult(
+                    answer=answer,
+                    provider="sarvam",
+                    model=self.model_name,
+                    prompt_tokens=len(user_prompt.split()),
+                    completion_tokens=len(answer.split()),
+                    generation_time_ms=elapsed_ms,
+                )
+            except Exception as e:
+                logger.warning(f"Sarvam SDK chat call failed ({e}), trying REST fallback")
 
-        return GenerationResult(
-            answer=answer,
-            provider="gemini",
-            model=self.model_name,
-            prompt_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
-            completion_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
-            generation_time_ms=elapsed_ms,
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Groq LLM
-# ═══════════════════════════════════════════════════════════════════════════
-
-class GroqLLM(BaseLLM):
-    """Groq API provider (fast inference)."""
-
-    provider_name = "groq"
-
-    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
-        cfg = get_settings()
-        self.model_name = model or "llama-3.1-8b-instant"
-        self.api_key = api_key or cfg.groq_api_key
-
-        if not self.api_key:
-            raise ValueError("GROQ_API_KEY is required for Groq provider")
-
-        from groq import Groq
-        self._client = Groq(api_key=self.api_key)
-        logger.info(f"Groq LLM initialised: {self.model_name}")
-
-    def generate(
-        self,
-        query: str,
-        chunks: Sequence[RetrievedChunk],
-        system_prompt: Optional[str] = None,
-    ) -> GenerationResult:
-        user_prompt = build_user_prompt(query, chunks)
-
-        t0 = time.perf_counter()
-        response = self._client.chat.completions.create(
-            model=self.model_name,
-            messages=[
-                {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
+        # REST fallback
+        headers = {
+            "api-subscription-key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.1,
-            max_tokens=1024,
-        )
-        elapsed_ms = (time.perf_counter() - t0) * 1000
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
 
-        answer = response.choices[0].message.content or ""
-        usage = response.usage
+        with httpx.Client(timeout=45.0) as client:
+            response = client.post(SARVAM_CHAT_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        choices = data.get("choices", [])
+        answer = choices[0].get("message", {}).get("content", "") if choices else ""
+        usage = data.get("usage", {})
 
         return GenerationResult(
             answer=answer,
-            provider="groq",
+            provider="sarvam",
             model=self.model_name,
-            prompt_tokens=usage.prompt_tokens if usage else 0,
-            completion_tokens=usage.completion_tokens if usage else 0,
-            generation_time_ms=elapsed_ms,
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# OpenAI LLM
-# ═══════════════════════════════════════════════════════════════════════════
-
-class OpenAILLM(BaseLLM):
-    """OpenAI API provider."""
-
-    provider_name = "openai"
-
-    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
-        cfg = get_settings()
-        self.model_name = model or "gpt-4o-mini"
-        self.api_key = api_key or cfg.openai_api_key
-
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
-
-        from openai import OpenAI
-        self._client = OpenAI(api_key=self.api_key)
-        logger.info(f"OpenAI LLM initialised: {self.model_name}")
-
-    def generate(
-        self,
-        query: str,
-        chunks: Sequence[RetrievedChunk],
-        system_prompt: Optional[str] = None,
-    ) -> GenerationResult:
-        user_prompt = build_user_prompt(query, chunks)
-
-        t0 = time.perf_counter()
-        response = self._client.chat.completions.create(
-            model=self.model_name,
-            messages=[
-                {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=1024,
-        )
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-
-        answer = response.choices[0].message.content or ""
-        usage = response.usage
-
-        return GenerationResult(
-            answer=answer,
-            provider="openai",
-            model=self.model_name,
-            prompt_tokens=usage.prompt_tokens if usage else 0,
-            completion_tokens=usage.completion_tokens if usage else 0,
+            prompt_tokens=usage.get("prompt_tokens", len(user_prompt.split())),
+            completion_tokens=usage.get("completion_tokens", len(answer.split())),
             generation_time_ms=elapsed_ms,
         )
 
@@ -236,29 +245,19 @@ class OpenAILLM(BaseLLM):
 def get_llm(provider: Optional[str] = None) -> BaseLLM:
     """
     Create an LLM instance based on the configured provider.
-
-    Falls back to MockLLM if the requested provider's API key is missing.
+    Strictly supports Sarvam AI and MockLLM.
     """
     cfg = get_settings()
     provider = provider or cfg.llm_provider
 
-    _PROVIDERS = {
-        "gemini": GeminiLLM,
-        "groq": GroqLLM,
-        "openai": OpenAILLM,
-        "mock": MockLLM,
-    }
-
     if provider == "mock":
         return MockLLM()
 
-    cls = _PROVIDERS.get(provider)
-    if cls is None:
-        logger.warning(f"Unknown LLM provider '{provider}', falling back to mock")
-        return MockLLM()
+    if provider == "sarvam":
+        try:
+            return SarvamLLM()
+        except ValueError as exc:
+            logger.warning(f"Sarvam LLM unavailable ({exc}), falling back to smart local extractor")
+            return MockLLM()
 
-    try:
-        return cls()
-    except ValueError as exc:
-        logger.warning(f"LLM provider '{provider}' unavailable ({exc}), falling back to mock")
-        return MockLLM()
+    return MockLLM()
