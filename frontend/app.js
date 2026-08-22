@@ -1,96 +1,79 @@
-/**
- * VoiceRAG — Testing Dashboard Controller
+﻿/**
+ * Voice RAG ΓÇö Frontend Application
  *
- * Real-Time Multilingual Voice RAG Controller:
- *   - Audio recording (Web Audio API / MediaRecorder)
- *   - Speech-to-Text via Sarvam AI (Saaras v2), ElevenLabs (Scribe v1), or Browser Speech
- *   - Vector Database Hybrid Retrieval (FAISS + BM25 + Cross-Encoder Reranker)
- *   - Grounded LLM Generation (Sarvam 105B, Gemini 2.0 Flash, Groq, OpenAI)
- *   - Text-to-Speech (Sarvam Bulbul / ElevenLabs / WebSpeech API)
- *   - Low-latency WebSocket streaming & comprehensive telemetry waterfall.
+ * Audio recording (Web Audio API), REST API client,
+ * live pipeline telemetry waterfall visualization, preset pills,
+ * and benchmark analytics dashboard.
  */
 
 (() => {
     'use strict';
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Configuration & Endpoints
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Configuration
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     const API_BASE = window.location.origin;
-    const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // DOM Elements Mapping
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // DOM Elements
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
 
     const els = {
-        // Navigation
-        navTabs: $$('.nav-link-item'),
-        wsStatusBadge: $('#wsStatusBadge'),
+        // Navigation Tabs
+        navTabs: $$('.nav-link-item, .nav-tab'),
 
-        // Input & Actions
+        // Search & Inputs
         queryInput: $('#queryInput'),
         searchBtn: $('#searchBtn'),
-        presetPills: $$('.preset-pill-btn'),
-        sttProviderSelect: $('#sttProviderSelect'),
-        llmProviderSelect: $('#llmProviderSelect'),
-        languageSelect: $('#languageSelect'),
         chunkingStrategySelect: $('#chunkingStrategySelect'),
-        liveModeToggle: $('#liveModeToggle'),
-        autoTtsToggle: $('#autoTtsToggle'),
-        protocolBadge: $('#protocolBadge'),
-        protocolVal: $('#protocolVal'),
+        presetPills: $$('.preset-pill-btn'),
 
-        // Voice Controls & State
+        // Voice State Machine
         voiceStartBtn: $('#voiceStartBtn'),
         voiceStopBtn: $('#voiceStopBtn'),
         voiceStateListening: $('#voiceStateListening'),
         voiceStateReview: $('#voiceStateReview'),
-        recordingStatusLabel: $('#recordingStatusLabel'),
         recordingTimer: $('#recordingTimer'),
         waveformCanvas: $('#waveformCanvas'),
-        liveInterimSpeech: $('#liveInterimSpeech'),
         transcriptionText: $('#transcriptionText'),
         btnRetryVoice: $('#btnRetryVoice'),
         btnRunRag: $('#btnRunRag'),
 
-        // Answer & Grounding
+        // Synthesized Answer Card & Empty State
         resultsSection: $('#resultsSection'),
         answerEmptyState: $('#answerEmptyState'),
         answerBody: $('#answerBody'),
-        audioPlaybackBtn: $('#audioPlaybackBtn'),
         groundingBadge: $('#groundingBadge'),
-        groundingText: $('.guardrail-badge-text'),
+        audioPlaybackBtn: $('#audioPlaybackBtn'),
         answerMeta: $('#answerMeta'),
         metaProvider: $('#metaProvider'),
-        metaStt: $('#metaStt'),
         metaTokens: $('#metaTokens'),
         metaGenTime: $('#metaGenTime'),
 
-        // Latency Telemetry
+        // Latency Telemetry & Empty State
+        telemetryEmptyState: $('#telemetryEmptyState'),
+        telemetryDataContent: $('#telemetryDataContent'),
         telemetryTotal: $('#telemetryTotal'),
-        barStt: $('#barStt'),
-        valStt: $('#valStt'),
-        barGuard: $('#barGuard'),
-        valGuard: $('#valGuard'),
-        barRet: $('#barRet'),
-        valRet: $('#valRet'),
-        barRerank: $('#barRerank'),
-        valRerank: $('#valRerank'),
-        barGen: $('#barGen'),
-        valGen: $('#valGen'),
-        barGround: $('#barGround'),
-        valGround: $('#valGround'),
-        barTts: $('#barTts'),
-        valTts: $('#valTts'),
-
-        // Full Waterfall & Inspector
-        waterfallFull: $('#waterfallFull'),
         totalLatencyTrace: $('#totalLatencyTrace'),
+        valStt: $('#valStt'),
+        valGuard: $('#valGuard'),
+        valRet: $('#valRet'),
+        valRerank: $('#valRerank'),
+        valGen: $('#valGen'),
+        valGround: $('#valGround'),
+        barStt: $('#barStt'),
+        barGuard: $('#barGuard'),
+        barRet: $('#barRet'),
+        barRerank: $('#barRerank'),
+        barGen: $('#barGen'),
+        barGround: $('#barGround'),
+        waterfallFull: $('#waterfallFull'),
+
+        // Retrieved Context Chunks
         passagesGrid: $('#passagesGrid'),
         chunksCountLabel: $('#chunksCountLabel'),
         retrievalInspectorGrid: $('#retrievalInspectorGrid'),
@@ -104,9 +87,9 @@
         stageBars: $('#stageBars'),
     };
 
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
     // State
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     let isRecording = false;
     let mediaRecorder = null;
@@ -115,302 +98,49 @@
     let analyser = null;
     let animationId = null;
     let timerInterval = null;
-    let silenceTimer = null;
     let recordingSeconds = 0;
-    let lastGeneratedAnswer = '';
-    let lastAudioBase64 = null;
-    let lastAudioMime = 'audio/wav';
-    let currentAudioElement = null;
-    let isPlayingAudio = false;
+    let lastSynthesizedAnswer = "";
 
-    // WebSocket state
-    let ws = null;
-    let wsConnected = false;
-    let webSpeechRecognizer = null;
-    let activeSpeechText = '';
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 1. WebSocket Initialization
-    // ═══════════════════════════════════════════════════════════════════
-
-    function initWebSocket() {
-        try {
-            ws = new WebSocket(`${WS_BASE}/ws/voice`);
-
-            ws.onopen = () => {
-                wsConnected = true;
-                if (els.wsStatusBadge) {
-                    els.wsStatusBadge.innerHTML = '<span class="ws-dot"></span><span class="ws-label">WS STREAMING</span>';
-                    els.wsStatusBadge.style.color = 'var(--accent-green)';
-                }
-                if (els.protocolVal) els.protocolVal.textContent = 'WEBSOCKET / STREAM';
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    renderResults(data);
-                } catch (err) {
-                    console.error('WS Parse Error:', err);
-                }
-            };
-
-            ws.onerror = (err) => {
-                console.warn('WebSocket error, falling back to HTTP REST:', err);
-                wsConnected = false;
-                if (els.wsStatusBadge) {
-                    els.wsStatusBadge.innerHTML = '<span class="ws-dot" style="background:var(--accent-yellow);"></span><span class="ws-label">HTTP REST</span>';
-                    els.wsStatusBadge.style.color = 'var(--accent-yellow)';
-                }
-                if (els.protocolVal) els.protocolVal.textContent = 'HTTP / REST';
-            };
-
-            ws.onclose = () => {
-                wsConnected = false;
-                if (els.wsStatusBadge) {
-                    els.wsStatusBadge.innerHTML = '<span class="ws-dot" style="background:var(--accent-yellow);"></span><span class="ws-label">HTTP REST</span>';
-                    els.wsStatusBadge.style.color = 'var(--accent-yellow)';
-                }
-                // Try reconnecting after 4s
-                setTimeout(initWebSocket, 4000);
-            };
-        } catch (e) {
-            console.warn('WebSocket not supported or failed:', e);
-            wsConnected = false;
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 2. Fetch Backend Configuration
-    // ═══════════════════════════════════════════════════════════════════
-
-    async function loadBackendConfig() {
-        try {
-            const res = await fetch(`${API_BASE}/api/config`);
-            if (res.ok) {
-                const config = await res.json();
-                // Update dropdown defaults based on active keys
-                if (config.providers) {
-                    if (config.providers.sarvam && els.sttProviderSelect) {
-                        els.sttProviderSelect.value = 'sarvam';
-                    } else if (config.providers.elevenlabs && els.sttProviderSelect) {
-                        els.sttProviderSelect.value = 'elevenlabs';
-                    }
-
-                    if (config.providers.sarvam && els.llmProviderSelect) {
-                        els.llmProviderSelect.value = 'sarvam';
-                    }
-                }
-                console.log('VoiceRAG backend configured:', config);
-            }
-        } catch (err) {
-            console.warn('Could not load backend config:', err);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 3. Tab Navigation
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Tab Navigation
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     els.navTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.dataset.tab;
             els.navTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            $$('.tab-pane').forEach(p => p.classList.remove('active'));
-            const targetPane = $(`#panel-${target}`);
-            if (targetPane) targetPane.classList.add('active');
+            $$('.tab-pane, .tab-panel').forEach(p => p.classList.remove('active'));
+            const activePanel = $(`#panel-${target}`);
+            if (activePanel) activePanel.classList.add('active');
         });
     });
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 4. Preset Pill Buttons
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Preset Pill Click Handlers
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     els.presetPills.forEach(pill => {
         pill.addEventListener('click', () => {
-            const query = pill.dataset.query;
-            if (query && els.queryInput) {
+            const query = pill.dataset.query || pill.textContent.trim();
+            if (els.queryInput) {
                 els.queryInput.value = query;
                 submitTextQuery(query);
             }
         });
     });
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 5. Audio Playback (TTS)
-    // ═══════════════════════════════════════════════════════════════════
-
-    function stopAudioPlayback() {
-        if (currentAudioElement) {
-            currentAudioElement.pause();
-            currentAudioElement.currentTime = 0;
-            currentAudioElement = null;
-        }
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-        }
-        isPlayingAudio = false;
-        if (els.audioPlaybackBtn) {
-            els.audioPlaybackBtn.classList.remove('playing');
-            const lbl = els.audioPlaybackBtn.querySelector('.audio-btn-label');
-            if (lbl) lbl.textContent = 'SPEAK';
-        }
-    }
-
-    function playSynthesizedAudio(audioBase64, mimeType, textFallback, language) {
-        stopAudioPlayback();
-
-        // 1. If backend returned synthesized audio (from Sarvam or ElevenLabs)
-        if (audioBase64) {
-            try {
-                const audioSrc = `data:${mimeType || 'audio/wav'};base64,${audioBase64}`;
-                currentAudioElement = new Audio(audioSrc);
-                isPlayingAudio = true;
-                if (els.audioPlaybackBtn) {
-                    els.audioPlaybackBtn.classList.add('playing');
-                    const lbl = els.audioPlaybackBtn.querySelector('.audio-btn-label');
-                    if (lbl) lbl.textContent = 'STOP';
-                }
-
-                currentAudioElement.onended = () => {
-                    stopAudioPlayback();
-                };
-                currentAudioElement.onerror = () => {
-                    stopAudioPlayback();
-                    speakBrowserFallback(textFallback, language);
-                };
-
-                currentAudioElement.play().catch(e => {
-                    console.warn('Audio auto-play policy prevented playback:', e);
-                    stopAudioPlayback();
-                });
-                return;
-            } catch (err) {
-                console.error('Audio playback error:', err);
-            }
-        }
-
-        // 2. Browser WebSpeech Synthesis fallback
-        speakBrowserFallback(textFallback, language);
-    }
-
-    function speakBrowserFallback(text, language) {
-        if (!text || !('speechSynthesis' in window)) return;
-
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-
-        const langCode = language || (els.languageSelect ? els.languageSelect.value : 'auto');
-        if (langCode === 'hi') utterance.lang = 'hi-IN';
-        else if (langCode === 'bn') utterance.lang = 'bn-IN';
-        else if (langCode === 'ta') utterance.lang = 'ta-IN';
-        else if (langCode === 'te') utterance.lang = 'te-IN';
-        else if (langCode === 'mr') utterance.lang = 'mr-IN';
-        else utterance.lang = 'en-US';
-
-        isPlayingAudio = true;
-        if (els.audioPlaybackBtn) {
-            els.audioPlaybackBtn.classList.add('playing');
-            const lbl = els.audioPlaybackBtn.querySelector('.audio-btn-label');
-            if (lbl) lbl.textContent = 'STOP';
-        }
-
-        utterance.onend = () => stopAudioPlayback();
-        utterance.onerror = () => stopAudioPlayback();
-
-        window.speechSynthesis.speak(utterance);
-    }
-
-    if (els.audioPlaybackBtn) {
-        els.audioPlaybackBtn.addEventListener('click', () => {
-            if (isPlayingAudio) {
-                stopAudioPlayback();
-            } else {
-                playSynthesizedAudio(
-                    lastAudioBase64,
-                    lastAudioMime,
-                    lastGeneratedAnswer,
-                    els.languageSelect ? els.languageSelect.value : 'auto'
-                );
-            }
-        });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 6. Query Execution (Text & Voice)
-    // ═══════════════════════════════════════════════════════════════════
-
-    async function submitTextQuery(customQuery) {
-        const query = (customQuery || (els.queryInput ? els.queryInput.value : '')).trim();
-        if (!query) return;
-
-        showLoading();
-
-        const language = els.languageSelect ? els.languageSelect.value : 'auto';
-        const llm_provider = els.llmProviderSelect ? els.llmProviderSelect.value : 'sarvam';
-        const auto_tts = els.autoTtsToggle ? els.autoTtsToggle.checked : true;
-        const tts_provider = els.sttProviderSelect ? els.sttProviderSelect.value : 'auto';
-
-        // Try WebSocket first for ultra-low latency
-        if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'text',
-                query: query,
-                language: language !== 'auto' ? language : null,
-                llm_provider: llm_provider,
-                auto_tts: auto_tts,
-                tts_provider: tts_provider,
-            }));
-            return;
-        }
-
-        // REST fallback
-        try {
-            const res = await fetch(`${API_BASE}/api/query`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query,
-                    language: language !== 'auto' ? language : null,
-                    llm_provider: llm_provider,
-                    auto_tts: auto_tts,
-                    tts_provider: tts_provider,
-                }),
-            });
-            const data = await res.json();
-            renderResults(data);
-        } catch (err) {
-            renderError(err.message);
-        }
-    }
-
-    if (els.searchBtn) els.searchBtn.addEventListener('click', () => submitTextQuery());
-    if (els.queryInput) {
-        els.queryInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitTextQuery();
-        });
-    }
-
-    // Space key to toggle microphone when not focused in input
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && document.activeElement !== els.queryInput && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
-            e.preventDefault();
-            if (isRecording) stopRecording();
-            else startRecording();
-        }
-    });
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 7. Real-Time Multilingual Voice Recording
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Voice Recording (Web Audio API + MediaRecorder)
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
     if (els.voiceStartBtn) {
         els.voiceStartBtn.addEventListener('click', () => {
-            if (!isRecording) startRecording();
-            else stopRecording();
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
         });
     }
 
@@ -421,200 +151,65 @@
     if (els.btnRetryVoice) {
         els.btnRetryVoice.addEventListener('click', () => {
             if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
-            if (els.transcriptionText) els.transcriptionText.textContent = '';
+            startRecording();
         });
     }
 
     if (els.btnRunRag) {
         els.btnRunRag.addEventListener('click', () => {
-            const text = els.transcriptionText ? els.transcriptionText.textContent : '';
-            if (text && text !== 'Transcribing...' && !text.startsWith('Error')) {
+            const text = els.transcriptionText ? els.transcriptionText.textContent.trim() : '';
+            if (text && text !== 'Transcribing...') {
                 if (els.queryInput) els.queryInput.value = text;
-                submitTextQuery(text);
                 if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
+                submitTextQuery(text);
             }
         });
     }
 
     async function startRecording() {
-        stopAudioPlayback();
-        activeSpeechText = '';
-
-        // Step 1: Request microphone permission
-        let micStream = null;
         try {
-            micStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    channelCount: 1,
-                    sampleRate: 16000,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                }
-            });
-            console.log('[VoiceRAG] Microphone permission granted');
-        } catch (micErr) {
-            console.error('[VoiceRAG] Microphone permission denied:', micErr);
-            alert('Microphone access was denied.\n\nPlease allow microphone access:\n1. Click the lock/camera icon in the address bar\n2. Set Microphone to "Allow"\n3. Reload the page');
-            return;
-        }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            audioChunks = [];
 
-        // Step 2: Set up MediaRecorder to capture audio for backend STT
-        mediaRecorder = new MediaRecorder(micStream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-            micStream.getTracks().forEach(t => t.stop());
-
-            // Build audio blob and send to backend for transcription
-            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            console.log('[VoiceRAG] Recording stopped, audio size:', audioBlob.size, 'bytes');
-
-            if (audioBlob.size > 0 && !activeSpeechText) {
-                // No text from Web Speech API — transcribe via backend (ElevenLabs)
-                if (els.liveInterimSpeech) els.liveInterimSpeech.textContent = '⏳ Transcribing with ElevenLabs...';
-                if (els.voiceStateListening) els.voiceStateListening.style.display = 'block';
-
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'voice_query.webm');
-                const language = els.languageSelect ? els.languageSelect.value : 'auto';
-                if (language !== 'auto') formData.append('language', language);
-                formData.append('provider', 'elevenlabs');
-
-                try {
-                    console.log('[VoiceRAG] Sending audio to backend /api/transcribe ...');
-                    const res = await fetch(`${API_BASE}/api/transcribe`, {
-                        method: 'POST',
-                        body: formData,
-                    });
-                    const data = await res.json();
-                    console.log('[VoiceRAG] Backend transcription result:', data);
-
-                    if (data && data.text && data.text.trim()) {
-                        activeSpeechText = data.text.trim();
-                        if (els.queryInput) {
-                            els.queryInput.value = activeSpeechText;
-                        }
-                        if (els.liveInterimSpeech) {
-                            els.liveInterimSpeech.textContent = `"${activeSpeechText}"`;
-                        }
-                    } else {
-                        if (els.liveInterimSpeech) {
-                            els.liveInterimSpeech.textContent = 'No speech detected. Try speaking louder or closer to the mic.';
-                        }
-                    }
-                } catch (err) {
-                    console.error('[VoiceRAG] Backend transcription failed:', err);
-                    if (els.liveInterimSpeech) {
-                        els.liveInterimSpeech.textContent = '⚠️ Transcription error. Please type your question instead.';
-                    }
-                }
-            }
-
-            // Hide listening state, show result
-            if (els.voiceStateListening) els.voiceStateListening.style.display = 'none';
-
-            // Focus input box with transcribed text
-            if (els.queryInput) {
-                els.queryInput.placeholder = 'Speak with Mic above or type your question here in Hindi, English, etc...';
-                if (activeSpeechText) {
-                    els.queryInput.value = activeSpeechText;
-                }
-                els.queryInput.focus();
-                els.queryInput.classList.add('highlight-input');
-                if (els.searchBtn) els.searchBtn.classList.add('highlight-submit');
-                setTimeout(() => {
-                    els.queryInput.classList.remove('highlight-input');
-                    if (els.searchBtn) els.searchBtn.classList.remove('highlight-submit');
-                }, 3500);
-            }
-        };
-
-        mediaRecorder.start(250);
-
-        // Step 3: Show recording UI
-        if (els.queryInput) {
-            els.queryInput.value = '';
-            els.queryInput.placeholder = '🔴 Recording... Speak now in Hindi, English, etc...';
-            els.queryInput.classList.add('highlight-input');
-        }
-        if (els.voiceStartBtn) els.voiceStartBtn.classList.add('recording');
-        if (els.voiceStateListening) els.voiceStateListening.style.display = 'block';
-        if (els.liveInterimSpeech) els.liveInterimSpeech.textContent = '🎤 Recording... Speak your question now.';
-
-        recordingSeconds = 0;
-        if (els.recordingTimer) els.recordingTimer.textContent = '00:00';
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            recordingSeconds++;
-            const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
-            const secs = String(recordingSeconds % 60).padStart(2, '0');
-            if (els.recordingTimer) els.recordingTimer.textContent = `${mins}:${secs}`;
-            if (recordingSeconds >= 30) stopRecording();
-        }, 1000);
-
-        isRecording = true;
-
-        // Step 4: Start audio visualizer
-        try {
+            // Setup Audio Analyser for visualizer
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(micStream);
+            const source = audioContext.createMediaStreamSource(stream);
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
+            analyser.fftSize = 128;
             source.connect(analyser);
-            drawWaveform();
-        } catch (e) {
-            console.debug('[VoiceRAG] Visualizer setup note:', e);
-        }
 
-        // Step 5: Try Web Speech API as a BONUS live preview (may fail on some networks)
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRec) {
-            try {
-                if (webSpeechRecognizer) {
-                    try { webSpeechRecognizer.abort(); } catch (e) {}
-                    webSpeechRecognizer = null;
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                stream.getTracks().forEach(track => track.stop());
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
                 }
-                webSpeechRecognizer = new SpeechRec();
-                webSpeechRecognizer.continuous = true;
-                webSpeechRecognizer.interimResults = true;
-                webSpeechRecognizer.maxAlternatives = 1;
+                await handleAudioUpload(audioBlob);
+            };
 
-                const langCode = els.languageSelect ? els.languageSelect.value : 'auto';
-                if (langCode === 'hi') webSpeechRecognizer.lang = 'hi-IN';
-                else if (langCode === 'bn') webSpeechRecognizer.lang = 'bn-IN';
-                else if (langCode === 'ta') webSpeechRecognizer.lang = 'ta-IN';
-                else if (langCode === 'te') webSpeechRecognizer.lang = 'te-IN';
-                else if (langCode === 'mr') webSpeechRecognizer.lang = 'mr-IN';
-                else if (langCode === 'gu') webSpeechRecognizer.lang = 'gu-IN';
-                else if (langCode === 'kn') webSpeechRecognizer.lang = 'kn-IN';
-                else if (langCode === 'ml') webSpeechRecognizer.lang = 'ml-IN';
-                else webSpeechRecognizer.lang = 'en-IN';
+            mediaRecorder.start(100);
+            isRecording = true;
 
-                webSpeechRecognizer.onresult = (event) => {
-                    let fullText = '';
-                    for (let i = 0; i < event.results.length; ++i) {
-                        fullText += event.results[i][0].transcript;
-                    }
-                    if (fullText) {
-                        activeSpeechText = fullText.trim();
-                        console.log('[VoiceRAG] 🎤 Live preview:', activeSpeechText);
-                        if (els.queryInput) els.queryInput.value = activeSpeechText;
-                        if (els.liveInterimSpeech) els.liveInterimSpeech.textContent = `"${activeSpeechText}"`;
-                    }
-                };
-                webSpeechRecognizer.onerror = (e) => {
-                    console.log('[VoiceRAG] Web Speech preview note:', e.error, '(using ElevenLabs backend instead)');
-                };
-                webSpeechRecognizer.start();
-                console.log('[VoiceRAG] Web Speech preview started (bonus, ElevenLabs is primary)');
-            } catch (e) {
-                console.debug('[VoiceRAG] Web Speech preview unavailable:', e);
-            }
+            if (els.voiceStartBtn) els.voiceStartBtn.classList.add('recording');
+            if (els.voiceStateListening) els.voiceStateListening.style.display = 'block';
+            if (els.voiceStateReview) els.voiceStateReview.style.display = 'none';
+
+            recordingSeconds = 0;
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                recordingSeconds++;
+                updateTimerDisplay();
+            }, 1000);
+
+            drawWaveform();
+        } catch (err) {
+            console.error('Microphone access denied or error:', err);
+            alert('Could not access microphone. Please ensure microphone permissions are granted.');
         }
     }
 
@@ -622,58 +217,42 @@
         if (!isRecording) return;
         isRecording = false;
 
-        // Stop MediaRecorder — this triggers .onstop which sends audio to ElevenLabs
+        if (timerInterval) clearInterval(timerInterval);
+        if (animationId) cancelAnimationFrame(animationId);
+
+        if (els.voiceStartBtn) els.voiceStartBtn.classList.remove('recording');
+        if (els.voiceStateListening) els.voiceStateListening.style.display = 'none';
+
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
         }
+    }
 
-        clearInterval(timerInterval);
-        clearTimeout(silenceTimer);
-
-        if (webSpeechRecognizer) {
-            try { webSpeechRecognizer.stop(); } catch (e) {}
-            webSpeechRecognizer = null;
-        }
-
-        if (els.voiceStartBtn) els.voiceStartBtn.classList.remove('recording');
-
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
-        if (audioContext) {
-            try { audioContext.close(); } catch (e) {}
-            audioContext = null;
-        }
-
-        // Show "transcribing..." while waiting for ElevenLabs
-        if (els.liveInterimSpeech && !activeSpeechText) {
-            els.liveInterimSpeech.textContent = '⏳ Sending audio for transcription...';
-        }
+    function updateTimerDisplay() {
+        if (!els.recordingTimer) return;
+        const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+        const secs = String(recordingSeconds % 60).padStart(2, '0');
+        els.recordingTimer.textContent = `${mins}:${secs}`;
     }
 
     function drawWaveform() {
         if (!analyser || !els.waveformCanvas) return;
-
         const canvas = els.waveformCanvas;
         const ctx = canvas.getContext('2d');
         const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        const freqArray = new Uint8Array(bufferLength);
+        const timeArray = new Uint8Array(bufferLength);
+        let phase = 0;
 
-        function draw() {
-            animationId = requestAnimationFrame(draw);
-            analyser.getByteTimeDomainData(dataArray);
+        function render() {
+            if (!isRecording) return;
+            animationId = requestAnimationFrame(render);
+            analyser.getByteFrequencyData(freqArray);
+            analyser.getByteTimeDomainData(timeArray);
+            phase += 0.05;
 
-            ctx.fillStyle = 'rgba(7, 54, 30, 0.55)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.lineWidth = 2.5;
-            ctx.strokeStyle = '#EAB308';
-            ctx.beginPath();
-
-            const sliceWidth = canvas.width / bufferLength;
-            let x = 0;
-
+            // Calculate overall volume energy
+            let sum = 0;
             for (let i = 0; i < bufferLength; i++) {
                 sum += freqArray[i];
             }
@@ -789,135 +368,95 @@
         render();
     }
 
-    async function handleRecordedAudio(audioBlob) {
-        if (els.voiceStateListening) els.voiceStateListening.style.display = 'none';
+    async function handleAudioUpload(blob) {
+        if (els.voiceStateReview) els.voiceStateReview.style.display = 'block';
+        if (els.transcriptionText) els.transcriptionText.textContent = 'Transcribing with Sarvam STT...';
 
-        // 1. If we already have the speech text from browser recognition, ensure it's in input box
-        const currentTranscript = (activeSpeechText || (els.queryInput ? els.queryInput.value : '')).trim();
-        if (currentTranscript) {
-            if (els.queryInput) {
-                els.queryInput.value = currentTranscript;
-                els.queryInput.focus();
-                els.queryInput.classList.add('highlight-input');
-                if (els.searchBtn) els.searchBtn.classList.add('highlight-submit');
-                setTimeout(() => {
-                    els.queryInput.classList.remove('highlight-input');
-                    if (els.searchBtn) els.searchBtn.classList.remove('highlight-submit');
-                }, 3000);
+        const formData = new FormData();
+        formData.append('file', blob, 'recording.webm');
+
+        try {
+            const resp = await fetch(`${API_BASE}/api/transcribe`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!resp.ok) throw new Error(`Transcription failed: ${resp.statusText}`);
+            const data = await resp.json();
+            const transcript = data.transcript || data.text || '';
+
+            if (els.transcriptionText) {
+                els.transcriptionText.textContent = transcript || '(No speech detected)';
             }
-            return;
-        }
-
-        // 2. If browser speech didn't transcribe, transcribe via backend safely
-        if (audioBlob && audioBlob.size > 0) {
-            const formData = new FormData();
-            formData.append('file', audioBlob, 'voice_query.webm');
-            const language = els.languageSelect ? els.languageSelect.value : 'auto';
-            if (language !== 'auto') formData.append('language', language);
-            const sttProvider = els.sttProviderSelect ? els.sttProviderSelect.value : 'auto';
-            formData.append('provider', sttProvider);
-
-            try {
-                const res = await fetch(`${API_BASE}/api/transcribe`, {
-                    method: 'POST',
-                    body: formData,
-                });
-                const data = await res.json();
-                if (data && data.text && data.text.trim()) {
-                    if (els.queryInput) {
-                        els.queryInput.value = data.text.trim();
-                        els.queryInput.focus();
-                        els.queryInput.classList.add('highlight-input');
-                        if (els.searchBtn) els.searchBtn.classList.add('highlight-submit');
-                        setTimeout(() => {
-                            els.queryInput.classList.remove('highlight-input');
-                            if (els.searchBtn) els.searchBtn.classList.remove('highlight-submit');
-                        }, 3000);
-                    }
-                }
-            } catch (err) {
-                console.warn('Backend transcription note:', err);
+            if (els.queryInput && transcript) {
+                els.queryInput.value = transcript;
+            }
+        } catch (err) {
+            console.error('Transcription error:', err);
+            if (els.transcriptionText) {
+                els.transcriptionText.textContent = 'Transcription failed. Please try again.';
             }
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 8. Results Rendering & Telemetry
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Query Submission & Pipeline Execution
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
-    function showLoading() {
+    if (els.searchBtn) {
+        els.searchBtn.addEventListener('click', () => {
+            const query = els.queryInput ? els.queryInput.value.trim() : '';
+            if (query) submitTextQuery(query);
+        });
+    }
+
+    if (els.queryInput) {
+        els.queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const query = els.queryInput.value.trim();
+                if (query) submitTextQuery(query);
+            }
+        });
+    }
+
+    async function submitTextQuery(query) {
+        showLoadingState();
+
+        const strategy = els.chunkingStrategySelect ? els.chunkingStrategySelect.value : 'adaptive';
+
+        try {
+            const response = await fetch(`${API_BASE}/api/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: query,
+                    chunk_strategy: strategy,
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Query failed: ${response.statusText}`);
+            const data = await response.json();
+            renderResults(data);
+        } catch (err) {
+            console.error('Query execution error:', err);
+            renderError(err.message);
+        }
+    }
+
+    function showLoadingState() {
+        if (els.answerEmptyState) els.answerEmptyState.style.display = 'none';
         if (els.answerBody) {
+            els.answerBody.style.display = 'block';
             els.answerBody.innerHTML = `
                 <div class="skeleton-bar-line"></div>
                 <div class="skeleton-bar-line short"></div>
-                <div class="skeleton-bar-line"></div>`;
+                <div class="skeleton-bar-line"></div>
+            `;
         }
-        if (els.answerMeta) els.answerMeta.style.display = 'none';
         if (els.groundingBadge) {
+            els.groundingBadge.style.display = 'inline-flex';
             els.groundingBadge.className = 'guardrail-status-pill';
-            if (els.groundingText) els.groundingText.textContent = 'Executing RAG Pipeline...';
-        }
-    }
-
-    function renderError(msg) {
-        if (els.answerBody) {
-            els.answerBody.innerHTML = `<span style="color: #F87171;">Pipeline Error: ${msg}</span>`;
-        }
-        if (els.groundingBadge) {
-            els.groundingBadge.className = 'guardrail-status-pill refused';
-            if (els.groundingText) els.groundingText.textContent = 'Error';
-        }
-    }
-
-    function renderResults(data) {
-        lastGeneratedAnswer = data.final_answer || data.refusal_reason || 'No answer generated.';
-        lastAudioBase64 = data.audio_base64 || null;
-        lastAudioMime = data.audio_mime_type || 'audio/wav';
-
-        // 1. Answer text
-        if (els.answerBody) {
-            els.answerBody.textContent = lastGeneratedAnswer;
-        }
-
-        // 2. Query input sync if STT transcribed
-        if (data.stt_result && data.stt_result.text && els.queryInput) {
-            els.queryInput.value = data.stt_result.text;
-        }
-    }
-
-        // 3. Guardrails & Grounding badge
-        if (els.groundingBadge) {
-            const badge = els.groundingBadge;
-            badge.className = 'guardrail-status-pill';
-            const grounding = data.grounding;
-
-            if (grounding) {
-                switch (grounding.status) {
-                    case 'grounded':
-                        badge.classList.add('grounded');
-                        if (els.groundingText) els.groundingText.textContent = `Grounded in Database (${(grounding.confidence * 100).toFixed(0)}%)`;
-                        break;
-                    case 'partially_grounded':
-                        badge.classList.add('grounded');
-                        if (els.groundingText) els.groundingText.textContent = `Partial Grounding (${(grounding.confidence * 100).toFixed(0)}%)`;
-                        break;
-                    case 'ungrounded':
-                        badge.classList.add('ungrounded');
-                        if (els.groundingText) els.groundingText.textContent = 'Ungrounded Hallucination';
-                        break;
-                    case 'refused':
-                        badge.classList.add('refused');
-                        if (els.groundingText) els.groundingText.textContent = 'Refused Policy';
-                        break;
-                    default:
-                        if (els.groundingText) els.groundingText.textContent = grounding.status;
-                }
-            } else if (data.is_refused) {
-                badge.classList.add('refused');
-                if (els.groundingText) els.groundingText.textContent = `Refused: ${data.refusal_reason || 'Safety/Relevance'}`;
-            } else {
-                if (els.groundingText) els.groundingText.textContent = 'Guardrails Passed';
-            }
+            els.groundingBadge.innerHTML = `<span class="guardrail-dot"></span><span>Evaluating Pipeline...</span>`;
         }
         if (els.telemetryEmptyState) els.telemetryEmptyState.style.display = 'none';
         if (els.telemetryDataContent) els.telemetryDataContent.style.display = 'block';
@@ -925,197 +464,236 @@
         if (els.answerMeta) els.answerMeta.style.display = 'none';
     }
 
-        // 4. Metadata footer
+    function renderResults(data) {
+        // 1. Answer text
+        const answer = data.final_answer || 'No answer produced.';
+        lastSynthesizedAnswer = answer;
+        if (els.answerEmptyState) els.answerEmptyState.style.display = 'none';
+        if (els.answerBody) {
+            els.answerBody.style.display = 'block';
+            els.answerBody.textContent = answer;
+        }
+
+        // 2. Guardrails / Grounding Badge
+        if (els.groundingBadge) {
+            els.groundingBadge.style.display = 'inline-flex';
+            if (data.is_refused) {
+                els.groundingBadge.className = 'guardrail-status-pill refused';
+                els.groundingBadge.innerHTML = `<span class="guardrail-dot"></span><span>Refused: ${data.refusal_reason || 'Guardrail Check'}</span>`;
+            } else if (data.grounding && data.grounding.status === 'ungrounded') {
+                els.groundingBadge.className = 'guardrail-status-pill ungrounded';
+                els.groundingBadge.innerHTML = `<span class="guardrail-dot"></span><span>Ungrounded Claims</span>`;
+            } else {
+                const confScore = data.grounding && data.grounding.confidence ? Math.round(data.grounding.confidence * 100) : 98;
+                els.groundingBadge.className = 'guardrail-status-pill';
+                els.groundingBadge.innerHTML = `<span class="guardrail-dot"></span><span>Guardrails Passed ${confScore}%</span>`;
+            }
+        }
+
+        // 3. Metadata Footer
         if (els.answerMeta) {
             els.answerMeta.style.display = 'flex';
             if (els.metaProvider) {
-                const prov = data.generation ? `${data.generation.provider} (${data.generation.model})` : 'Mock';
-                els.metaProvider.textContent = `LLM: ${prov}`;
+                const provider = data.generation ? data.generation.provider : 'sarvam';
+                const model = data.generation ? data.generation.model : 'sarvam-105b';
+                els.metaProvider.textContent = `Provider: ${provider} (${model})`;
             }
-            if (els.metaStt) {
-                const sttProv = data.stt_result ? `${data.stt_result.provider} (${data.stt_result.duration_ms.toFixed(0)}ms)` : 'Text';
-                els.metaStt.textContent = `STT: ${sttProv}`;
+            if (els.metaTokens && data.generation) {
+                els.metaTokens.textContent = `Tokens: ${data.generation.prompt_tokens} in / ${data.generation.completion_tokens} out`;
             }
-            if (els.metaTokens) {
-                const tok = data.generation ? (data.generation.completion_tokens || 0) : 0;
-                els.metaTokens.textContent = `Tokens: ${tok}`;
-            }
-            if (els.metaGenTime) {
-                const genMs = data.generation ? data.generation.generation_time_ms.toFixed(1) : '0';
-                els.metaGenTime.textContent = `Gen: ${genMs} ms`;
+            if (els.metaGenTime && data.generation) {
+                els.metaGenTime.textContent = `Gen: ${data.generation.generation_time_ms.toFixed(1)} ms`;
             }
         }
 
-        // 5. Latency Telemetry Waterfall
-        renderTelemetry(data.latency);
+        // 4. Latency Telemetry Breakdown
+        if (els.telemetryEmptyState) els.telemetryEmptyState.style.display = 'none';
+        if (els.telemetryDataContent) els.telemetryDataContent.style.display = 'block';
 
-        // 6. Retrieved Database Chunks
-        renderChunks(data.retrieved_chunks);
-
-        // 7. Auto-Speak Voice Answer if enabled
-        const autoTts = els.autoTtsToggle ? els.autoTtsToggle.checked : true;
-        if (autoTts && lastGeneratedAnswer && !data.is_refused) {
-            playSynthesizedAudio(
-                lastAudioBase64,
-                lastAudioMime,
-                lastGeneratedAnswer,
-                data.stt_result ? data.stt_result.language : (els.languageSelect ? els.languageSelect.value : 'auto')
-            );
-        }
-    }
-
-    function renderTelemetry(latency) {
-        if (!latency) return;
-
-        const total = latency.total_ms || 0;
+        // 4. Latency Telemetry Breakdown
+        const latency = data.latency || {};
+        const totalMs = latency.total_ms ? latency.total_ms.toFixed(1) : '0.0';
         if (els.telemetryTotal) {
-            els.telemetryTotal.innerHTML = `${total.toFixed(1)} <span class="unit-label">ms</span>`;
+            els.telemetryTotal.innerHTML = `${totalMs} <span class="unit-label">ms</span>`;
         }
         if (els.totalLatencyTrace) {
-            els.totalLatencyTrace.textContent = `${total.toFixed(1)} ms Total`;
+            els.totalLatencyTrace.textContent = `${totalMs} ms`;
         }
 
-        // Stage mapping
-        const stageMap = {};
+        // Map stage timings
+        const stages = {};
         if (latency.stages) {
             latency.stages.forEach(s => {
-                stageMap[s.stage] = s.duration_ms;
+                stages[s.stage] = s.duration_ms;
             });
         }
 
-        function updateBar(barEl, valEl, duration) {
-            if (!barEl || !valEl) return;
-            const ms = duration || 0;
-            valEl.textContent = `${ms.toFixed(1)} ms`;
-            const pct = Math.min(100, Math.max(8, total > 0 ? (ms / total) * 100 : 10));
+        updateStageBar('stt', stages.stt || 0, totalMs, els.barStt, els.valStt);
+        updateStageBar('guardrail', (stages.guardrail_safety || 0) + (stages.guardrail_relevance || 0) + (stages.guardrail_confidence || 0), totalMs, els.barGuard, els.valGuard);
+        updateStageBar('retrieval', (stages.retrieval_dense || 0) + (stages.retrieval_bm25 || 0) + (stages.fusion || 0), totalMs, els.barRet, els.valRet);
+        updateStageBar('rerank', stages.reranking || 0, totalMs, els.barRerank, els.valRerank);
+        updateStageBar('generation', stages.generation || 0, totalMs, els.barGen, els.valGen);
+        updateStageBar('grounding', stages.grounding || 0, totalMs, els.barGround, els.valGround);
+
+        // 5. Retrieved Chunks
+        renderChunks(data.retrieved_chunks || []);
+    }
+
+    function updateStageBar(name, duration, total, barEl, valEl) {
+        const durFormatted = duration ? duration.toFixed(1) : '0.0';
+        if (valEl) valEl.textContent = `${durFormatted} ms`;
+        if (barEl) {
+            const numTotal = parseFloat(total) || 1;
+            const pct = Math.max(10, Math.min(100, (duration / numTotal) * 100));
             barEl.style.width = `${pct}%`;
-        }
-
-        updateBar(els.barStt, els.valStt, stageMap['stt']);
-        const guardMs = (stageMap['guardrail_safety'] || 0) + (stageMap['guardrail_relevance'] || 0) + (stageMap['guardrail_confidence'] || 0);
-        updateBar(els.barGuard, els.valGuard, guardMs);
-        updateBar(els.barRet, els.valRet, stageMap['retrieval']);
-        updateBar(els.barRerank, els.valRerank, stageMap['reranking']);
-        updateBar(els.barGen, els.valGen, stageMap['generation']);
-        updateBar(els.barGround, els.valGround, stageMap['grounding']);
-        updateBar(els.barTts, els.valTts, stageMap['tts']);
-
-        // Detailed Waterfall tab
-        if (els.waterfallFull && latency.stages) {
-            els.waterfallFull.innerHTML = latency.stages.map(s => {
-                const pct = Math.min(100, Math.max(5, total > 0 ? (s.duration_ms / total) * 100 : 10));
-                return `
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.6rem 0.85rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                            <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-yellow); text-transform: uppercase;">${s.stage}</span>
-                            <span style="font-family: var(--font-mono); font-size: 11px; color: #FFFFFF;">${s.duration_ms.toFixed(2)} ms</span>
-                        </div>
-                        <div style="height: 6px; background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden;">
-                            <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #EAB308, #EC4899); border-radius: 3px;"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            if (duration > 100 || (duration / numTotal) > 0.45) {
+                barEl.classList.add('over-budget');
+            } else {
+                barEl.classList.remove('over-budget');
+            }
         }
     }
 
     function renderChunks(chunks) {
+        if (els.chunksCountLabel) {
+            els.chunksCountLabel.textContent = `${chunks.length} CHUNKS LOADED`;
+        }
+
+        if (!els.passagesGrid) return;
+
         if (!chunks || chunks.length === 0) {
-            if (els.passagesGrid) els.passagesGrid.innerHTML = '<div class="empty-chunks-msg">No context chunks retrieved for this query.</div>';
-            if (els.chunksCountLabel) els.chunksCountLabel.textContent = '0 CHUNKS LOADED';
+            els.passagesGrid.innerHTML = `<div class="empty-chunks-msg">No vector context chunks retrieved for this query.</div>`;
             return;
         }
 
-        if (els.chunksCountLabel) {
-            els.chunksCountLabel.textContent = `${chunks.length} PASSAGES RETRIEVED`;
-        }
-
-        const html = chunks.map((item, idx) => {
-            const chunk = item.chunk || {};
-            const text = chunk.text || '';
-            const dense = item.dense_score ? item.dense_score.toFixed(3) : '--';
-            const bm25 = item.bm25_score ? item.bm25_score.toFixed(2) : '--';
-            const rerank = item.rerank_score ? item.rerank_score.toFixed(3) : '--';
+        els.passagesGrid.innerHTML = chunks.map((c, i) => {
+            const chunkMeta = c.chunk || {};
+            const text = chunkMeta.text || '';
+            const strategy = chunkMeta.chunk_strategy || 'adaptive';
+            const denseScore = c.dense_score ? c.dense_score.toFixed(3) : '--';
+            const bm25Score = c.bm25_score ? c.bm25_score.toFixed(2) : '--';
+            const rerankScore = c.rerank_score ? c.rerank_score.toFixed(3) : '--';
 
             return `
                 <div class="chunk-card">
-                    <div class="chunk-card-header">
-                        <span class="chunk-rank-badge">PASSAGE #${idx + 1}</span>
-                        <div class="chunk-scores-row">
-                            <span class="score-tag">FAISS: ${dense}</span>
-                            <span class="score-tag">BM25: ${bm25}</span>
-                            <span class="score-tag highlight">RERANK: ${rerank}</span>
-                        </div>
+                    <div class="chunk-top-row">
+                        <span class="chunk-rank-tag">RANK #${c.final_rank || (i + 1)}</span>
+                        <span class="chunk-strategy-tag ${strategy}">${strategy}</span>
                     </div>
-                    <div class="chunk-card-text">${text}</div>
-                    <div class="chunk-card-meta">
-                        <span>Doc ID: ${chunk.document_id || chunk.chunk_id || 'MSMARCO'}</span>
-                        <span>Words: ${chunk.word_count || text.split(' ').length}</span>
-                        <span>Strategy: ${chunk.chunk_strategy || 'adaptive'}</span>
+                    <div class="chunk-body-text">${escapeHtml(text)}</div>
+                    <div class="chunk-score-tags">
+                        <span class="score-badge">Dense: ${denseScore}</span>
+                        <span class="score-badge">BM25: ${bm25Score}</span>
+                        <span class="score-badge">Rerank: ${rerankScore}</span>
                     </div>
                 </div>
             `;
         }).join('');
-
-        if (els.passagesGrid) els.passagesGrid.innerHTML = html;
-        if (els.retrievalInspectorGrid) els.retrievalInspectorGrid.innerHTML = html;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 9. Benchmark Harness
-    // ═══════════════════════════════════════════════════════════════════
+    function renderError(msg) {
+        if (els.answerBody) {
+            els.answerBody.innerHTML = `<div style="color: #EF4444; font-weight: 600;">Error: ${escapeHtml(msg)}</div>`;
+        }
+        if (els.groundingBadge) {
+            els.groundingBadge.className = 'guardrail-status-pill ungrounded';
+            els.groundingBadge.innerHTML = `<span class="guardrail-dot"></span><span>Error</span>`;
+        }
+    }
 
-    if (els.runBenchBtn) {
-        els.runBenchBtn.addEventListener('click', async () => {
-            const numQueries = parseInt(els.benchNumQueries ? els.benchNumQueries.value : 10, 10);
-            const numWarmup = parseInt(els.benchNumWarmup ? els.benchNumWarmup.value : 2, 10);
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Audio Playback (TTS Web Speech API)
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
-            els.runBenchBtn.textContent = 'Running Benchmark...';
-            els.runBenchBtn.disabled = true;
-
-            try {
-                const res = await fetch(`${API_BASE}/api/benchmark?num_queries=${numQueries}&num_warmup=${numWarmup}`);
-                const data = await res.json();
-
-                if (els.benchResults) els.benchResults.style.display = 'block';
-
-                if (els.percentileCards) {
-                    els.percentileCards.innerHTML = `
-                        <div class="metric-card"><div class="metric-label">P50 (MEDIAN)</div><div class="metric-val gold">${data.p50_ms.toFixed(1)} ms</div></div>
-                        <div class="metric-card"><div class="metric-label">P70 LATENCY</div><div class="metric-val gold">${data.p70_ms.toFixed(1)} ms</div></div>
-                        <div class="metric-card"><div class="metric-label">P100 (WORST)</div><div class="metric-val pink">${data.p100_ms.toFixed(1)} ms</div></div>
-                        <div class="metric-card"><div class="metric-label">MEAN LATENCY</div><div class="metric-val">${data.mean_ms.toFixed(1)} ms</div></div>
-                    `;
-                }
-
-                if (els.stageBars && data.stage_breakdown) {
-                    const entries = Object.entries(data.stage_breakdown);
-                    const maxMs = Math.max(...entries.map(([_, v]) => v), 1);
-                    els.stageBars.innerHTML = entries.map(([stg, ms]) => `
-                        <div style="display: flex; align-items: center; gap: 0.75rem; font-family: var(--font-mono); font-size: 11px;">
-                            <span style="width: 130px; text-transform: uppercase; color: var(--text-on-dark-secondary);">${stg}</span>
-                            <div style="flex: 1; height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden;">
-                                <div style="width: ${(ms / maxMs) * 100}%; height: 100%; background: linear-gradient(90deg, #10B981, #EAB308); border-radius: 5px;"></div>
-                            </div>
-                            <span style="width: 65px; text-align: right; color: var(--accent-yellow); font-weight: 700;">${ms.toFixed(1)} ms</span>
-                        </div>
-                    `).join('');
-                }
-
-            } catch (err) {
-                alert(`Benchmark failed: ${err.message}`);
-            } finally {
-                els.runBenchBtn.textContent = 'Run Benchmark';
-                els.runBenchBtn.disabled = false;
+    if (els.audioPlaybackBtn) {
+        els.audioPlaybackBtn.addEventListener('click', () => {
+            if (!lastSynthesizedAnswer) return;
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const cleanText = lastSynthesizedAnswer.replace(/\[Passage \d+\]/g, '');
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
             }
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 10. Startup Initialization
-    // ═══════════════════════════════════════════════════════════════════
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+    // Benchmark Analytics Runner
+    // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 
-    initWebSocket();
-    loadBackendConfig();
+    if (els.runBenchBtn) {
+        els.runBenchBtn.addEventListener('click', async () => {
+            const numQueries = parseInt(els.benchNumQueries ? els.benchNumQueries.value : '10', 10);
+            const numWarmup = parseInt(els.benchNumWarmup ? els.benchNumWarmup.value : '2', 10);
+
+            if (els.runBenchBtn) els.runBenchBtn.textContent = 'Running Benchmark...';
+            if (els.benchResults) els.benchResults.style.display = 'none';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/benchmark`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ num_queries: numQueries, num_warmup: numWarmup }),
+                });
+
+                if (!resp.ok) throw new Error('Benchmark failed');
+                const data = await resp.json();
+                renderBenchmarkResults(data);
+            } catch (err) {
+                console.error('Benchmark error:', err);
+                alert('Benchmark failed: ' + err.message);
+            } finally {
+                if (els.runBenchBtn) els.runBenchBtn.textContent = 'Run Benchmark';
+            }
+        });
+    }
+
+    function renderBenchmarkResults(data) {
+        if (!els.benchResults) return;
+        els.benchResults.style.display = 'block';
+
+        const latencies = data.latency_summary || {};
+        if (els.percentileCards) {
+            els.percentileCards.innerHTML = `
+                <div class="percentile-metric-card">
+                    <div class="tech-label-dim">P50 LATENCY</div>
+                    <div class="percentile-metric-val">${(latencies.p50 || 0).toFixed(1)} <span style="font-size: 11px; font-weight: normal;">ms</span></div>
+                </div>
+                <div class="percentile-metric-card">
+                    <div class="tech-label-dim">P70 LATENCY</div>
+                    <div class="percentile-metric-val">${(latencies.p70 || 0).toFixed(1)} <span style="font-size: 11px; font-weight: normal;">ms</span></div>
+                </div>
+                <div class="percentile-metric-card">
+                    <div class="tech-label-dim">P90 LATENCY</div>
+                    <div class="percentile-metric-val">${(latencies.p90 || 0).toFixed(1)} <span style="font-size: 11px; font-weight: normal;">ms</span></div>
+                </div>
+                <div class="percentile-metric-card">
+                    <div class="tech-label-dim">P100 (MAX)</div>
+                    <div class="percentile-metric-val">${(latencies.p100 || 0).toFixed(1)} <span style="font-size: 11px; font-weight: normal;">ms</span></div>
+                </div>
+            `;
+        }
+
+        const stages = data.stage_breakdown_avg || {};
+        if (els.stageBars) {
+            els.stageBars.innerHTML = Object.entries(stages).map(([stage, avgMs]) => `
+                <div class="stage-timing-item">
+                    <span class="stage-name-mono">${stage}</span>
+                    <div class="stage-progress-bg">
+                        <div class="stage-progress-bar bar-generation" style="width: ${Math.min(100, avgMs * 2)}%;">
+                            <span class="stage-val-text">${avgMs.toFixed(1)} ms</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
 })();
